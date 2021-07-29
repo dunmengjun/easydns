@@ -12,7 +12,7 @@ cargo install --path .
 ### 可选依赖:
 4. 在本机上测试和运行依赖于 qemu-mipsel 5.2.0, 单纯编译不需要。
 
-##运行项目
+## 运行项目
 
 ### 自动rust版本同步
 ```shell
