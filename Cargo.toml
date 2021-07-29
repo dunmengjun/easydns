@@ -1,0 +1,15 @@
+[package]
+name = "easydns"
+version = "0.1.0"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+
+[package.metadata.scripts]
+runner = """qemu-mipsel -L /home/dmj/mipsel-linux-uclibc/mipsel-linux-uclibc/sysroot {0}"""
+build = "cargo build -Z build-std"
+run = "cargo run -Z build-std"
+test = "cargo test -Z build-std"
+release = "cargo build --release -Z build-std"
