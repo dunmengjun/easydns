@@ -1,5 +1,5 @@
 [build]
-target = "mipsel-unknown-linux-uclibc"
+#target = "mipsel-unknown-linux-uclibc"
 
 [target.mipsel-unknown-linux-uclibc]
 runner = "cargo exec runner"
