@@ -1,6 +1,3 @@
-[build]
-#target = "mipsel-unknown-linux-uclibc"
-
 [target.mipsel-unknown-linux-uclibc]
 runner = "cargo exec runner"
 linker = "/home/dmj/mipsel-linux-uclibc/bin/mipsel-linux-uclibc-cc"

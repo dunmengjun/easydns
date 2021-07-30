@@ -9,7 +9,7 @@ edition = "2018"
 
 [package.metadata.scripts]
 runner = """qemu-mipsel -L /home/dmj/mipsel-linux-uclibc/mipsel-linux-uclibc/sysroot {0}"""
-build = "cargo build -Z build-std"
-run = "cargo run -Z build-std"
-test = "cargo test -Z build-std"
-release = "cargo build --release -Z build-std"
+build = "cargo build --target mipsel-unknown-linux-uclibc -Z build-std"
+run = "cargo run --target mipsel-unknown-linux-uclibc -Z build-std"
+test = "cargo test --target mipsel-unknown-linux-uclibc -Z build-std"
+release = "cargo build --target mipsel-unknown-linux-uclibc --release -Z build-std"

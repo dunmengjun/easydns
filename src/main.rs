@@ -1,24 +1,46 @@
+mod cursor;
+
 use std::net::UdpSocket;
-use std::sync::{Mutex};
 use std::fmt::{Debug};
+use std::sync::atomic::{AtomicU16, Ordering};
+use crate::cursor::Cursor;
 
 fn get_id() -> u16 {
-    static mut ID_GEN: u16 = 0;
+    static mut ID_GEN: AtomicU16 = AtomicU16::new(0);
     unsafe {
-        let mutex = Mutex::new(10);
-        mutex.lock();
-        ID_GEN = ID_GEN + 1;
-        if ID_GEN > u16::MAX {
-            ID_GEN = 0
-        }
-        ID_GEN
+        ID_GEN.fetch_add(1, Ordering::SeqCst)
     }
 }
 
 fn to_u8_to_push(vec: &mut Vec<u8>, data: u16) {
-    let mut tmp = data.to_be_bytes();
+    let tmp = data.to_be_bytes();
     vec.push(tmp[0]);
     vec.push(tmp[1]);
+}
+
+fn parse_name(cursor: &mut Cursor, name_vec: &mut Vec<u8>) {
+    if cursor.peek() & 192u8 == 192u8 {
+        let c_index = u16::from_be_bytes([cursor.take(), cursor.take()]);
+        let current_index_saved = cursor.get_current_index();
+        cursor.at((c_index & 16383u16) as usize);
+        parse_name(cursor, name_vec);
+        cursor.at(current_index_saved);
+    } else {
+        let seg_len = cursor.peek();
+        if seg_len > 0 {
+            let segment = cursor.take_slice(seg_len as usize + 1);
+            name_vec.extend(segment);
+            parse_name(cursor, name_vec)
+        } else {
+            name_vec.push(cursor.take());
+        }
+    };
+}
+
+fn unzip_domain(cursor: &mut Cursor) -> Vec<u8> {
+    let mut domain_vec = Vec::new();
+    parse_name(cursor, &mut domain_vec);
+    domain_vec
 }
 
 #[derive(Debug)]
@@ -44,7 +66,7 @@ impl Header {
         }
     }
     fn as_bytes(&self) -> Vec<u8> {
-        let mut result = Vec::new();
+        let mut result = Vec::with_capacity(12);
         to_u8_to_push(&mut result, self.id);
         to_u8_to_push(&mut result, self.flags);
         to_u8_to_push(&mut result, self.question_count);
@@ -53,14 +75,14 @@ impl Header {
         to_u8_to_push(&mut result, self.additional_count);
         result
     }
-    fn from(src: &[u8]) -> Self {
+    fn from(cursor: &mut Cursor) -> Self {
         Header {
-            id: u16::from_be_bytes([src[0], src[1]]),
-            flags: u16::from_be_bytes([src[2], src[3]]),
-            question_count: u16::from_be_bytes([src[4], src[5]]),
-            answer_count: u16::from_be_bytes([src[6], src[7]]),
-            authority_count: u16::from_be_bytes([src[8], src[9]]),
-            additional_count: u16::from_be_bytes([src[10], src[11]]),
+            id: u16::from_be_bytes([cursor.take(), cursor.take()]),
+            flags: u16::from_be_bytes([cursor.take(), cursor.take()]),
+            question_count: u16::from_be_bytes([cursor.take(), cursor.take()]),
+            answer_count: u16::from_be_bytes([cursor.take(), cursor.take()]),
+            authority_count: u16::from_be_bytes([cursor.take(), cursor.take()]),
+            additional_count: u16::from_be_bytes([cursor.take(), cursor.take()]),
         }
     }
 }
@@ -75,7 +97,7 @@ struct Question {
 impl Question {
     fn new(domain: &str) -> Self {
         let mut question = Question {
-            name: vec![],
+            name: Vec::with_capacity(domain.len()),
             _type: 1,
             class: 1,
         };
@@ -84,46 +106,28 @@ impl Question {
     }
     fn as_bytes(&mut self) -> Vec<u8> {
         let mut result = Vec::new();
-        let x = self._type.to_be_bytes();
-        let y = self.class.to_be_bytes();
         result.extend(&self.name);
-        result.push(x[0]);
-        result.push(x[1]);
-        result.push(y[0]);
-        result.push(y[1]);
+        to_u8_to_push(&mut result, self._type);
+        to_u8_to_push(&mut result, self.class);
         result
     }
     fn set_name(&mut self, domain: &str) {
-        let split = domain.split('.');
-        for segment in split {
+        for segment in domain.split('.') {
             self.name.push(segment.len() as u8);
-            let seg_u8 = segment.as_bytes();
-            for c in seg_u8 {
-                self.name.push(c.clone());
-            }
+            self.name.extend(segment.as_bytes());
         }
         self.name.push(0);
     }
 
-    fn from(buf: &[u8]) -> (Self, usize) {
-        let mut current_index = 0;
-        let mut seg_len = buf[current_index] as usize;
-        let mut name = Vec::new();
-        while seg_len > 0 {
-            let segment = &buf[current_index..current_index + seg_len + 1];
-            name.extend(segment);
-            current_index = current_index + seg_len + 1;
-            seg_len = buf[current_index] as usize;
-        }
-        name.push(buf[current_index]);
-        current_index += 1;
-        let _type = u16::from_be_bytes([buf[current_index], buf[current_index + 1]]);
-        let class = u16::from_be_bytes([buf[current_index + 2], buf[current_index + 3]]);
-        (Question {
+    fn from(cursor: &mut Cursor) -> Self {
+        let name = unzip_domain(cursor);
+        let _type = u16::from_be_bytes([cursor.take(), cursor.take()]);
+        let class = u16::from_be_bytes([cursor.take(), cursor.take()]);
+        Question {
             name,
             _type,
             class,
-        }, current_index + 4)
+        }
     }
 }
 
@@ -162,22 +166,24 @@ struct ResourceRecord {
 }
 
 impl ResourceRecord {
-    fn from(buf: &[u8]) -> (Self, usize) {
-        let result = Question::from(&buf[0..buf.len()]);
-        let mut index = result.1;
-        let ttl = u32::from_be_bytes([buf[index], buf[index + 1], buf[index + 2], buf[index + 3]]);
-        index += 4;
-        let data_len = u16::from_be_bytes([buf[index], buf[index + 1]]);
-        index += 2;
-        let data = Vec::<u8>::from(&buf[index..index + data_len as usize]);
-        (ResourceRecord {
-            name: result.0.name,
-            _type: result.0._type,
-            class: result.0.class,
+    fn from(cursor: &mut Cursor) -> Self {
+        let question = Question::from(cursor);
+        let ttl = u32::from_be_bytes([cursor.take(),
+            cursor.take(), cursor.take(), cursor.take()]);
+        let data_len = u16::from_be_bytes([cursor.take(), cursor.take()]);
+        let data = if question._type == 5 { //说明是cname类型
+            unzip_domain(cursor)
+        } else {
+            Vec::<u8>::from(cursor.take_slice(data_len as usize))
+        };
+        ResourceRecord {
+            name: question.name,
+            _type: question._type,
+            class: question.class,
             ttl,
             data_len,
             data,
-        }, index + data_len as usize)
+        }
     }
 }
 
@@ -189,21 +195,16 @@ struct DNSAnswer {
 }
 
 impl DNSAnswer {
-    fn from(buf: &[u8]) -> Self {
-        let header = Header::from(&buf[0..12]);
-        let mut current_index = 12;
+    fn from(cursor: &mut Cursor) -> Self {
+        let header = Header::from(cursor);
         let mut questions = Vec::new();
-        for _ in 0..header.question_count as usize {
-            let result = Question::from(&buf[current_index..buf.len()]);
-            questions.push(result.0);
-            current_index += result.1
-        }
+        (0..header.question_count as usize).into_iter().for_each(|_| {
+            questions.push(Question::from(cursor));
+        });
         let mut resources = Vec::new();
-        for _ in 0..header.answer_count as usize {
-            let result = ResourceRecord::from(&buf[current_index..buf.len()]);
-            resources.push(result.0);
-            current_index += result.1;
-        }
+        (0..header.answer_count as usize).into_iter().for_each(|_| {
+            resources.push(ResourceRecord::from(cursor));
+        });
         DNSAnswer {
             header,
             questions,
@@ -215,9 +216,9 @@ impl DNSAnswer {
 fn main() {
     let socket = UdpSocket::bind("0.0.0.0:22222").unwrap();
     let mut query = DNSQuery::new("www.baidu.com");
-    let vec = query.as_bytes();
-    println!("send {:?}", &vec);
-    match socket.send_to(vec.as_slice(), "192.168.123.1:53") {
+    let query_vec = query.as_bytes();
+    println!("send {:?}", &query_vec);
+    match socket.send_to(query_vec.as_slice(), "114.114.114.114:53") {
         Ok(size) => println!("send ok {}", size),
         Err(e) => println!("send error {:?}", e)
     }
@@ -225,7 +226,9 @@ fn main() {
     match socket.recv_from(&mut buf) {
         Ok(result) => {
             println!("size: {}, addr: {}", result.0, result.1);
-            let answer = DNSAnswer::from(&buf);
+            let answer = DNSAnswer::from(
+                &mut Cursor::from(Vec::from(&buf[0..result.0]))
+            );
             println!("answer {:?}", answer);
         }
         Err(e) => println!("res error {:?}", e)
