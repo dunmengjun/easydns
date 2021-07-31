@@ -1,14 +1,18 @@
-pub struct Cursor {
-    buf: Vec<u8>,
+pub struct PacketBuffer {
+    buf: [u8; 512],
     current: usize,
 }
 
-impl Cursor {
-    pub fn from(buf: Vec<u8>) -> Self {
-        Cursor {
-            buf,
+impl PacketBuffer {
+    pub fn new() -> Self {
+        PacketBuffer {
+            buf: [0u8; 512],
             current: 0,
         }
+    }
+
+    pub fn as_mut_slice(&mut self) -> &mut [u8] {
+        &mut self.buf
     }
 
     pub fn at(&mut self, index: usize) {
@@ -30,9 +34,6 @@ impl Cursor {
     }
 
     pub fn take_slice(&mut self, len: usize) -> &[u8] {
-        if self.current + len > self.buf.len() {
-            println!("xxx");
-        }
         let result = &self.buf[self.current..self.current + len];
         self.current += len;
         result
