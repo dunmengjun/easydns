@@ -19,6 +19,14 @@ impl PacketBuffer {
         self.current = index;
     }
 
+    #[inline]
+    pub fn tmp_at<F: FnMut(&mut Self)>(&mut self, index: usize, mut func: F) {
+        let current_index_saved = self.get_current_index();
+        self.at(index);
+        func(self);
+        self.at(current_index_saved);
+    }
+
     pub fn take(&mut self) -> u8 {
         let result: u8 = self.buf[self.current];
         self.current += 1;
