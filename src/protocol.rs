@@ -1,8 +1,7 @@
 use std::fmt::{Debug};
 use crate::buffer::PacketBuffer;
 use crate::cache::DNSCacheRecord;
-use std::collections::HashMap;
-use std::net::SocketAddr;
+use crate::timer::get_timestamp;
 
 const C_FACTOR: u8 = 192u8;
 const DC_FACTOR: u16 = 16383u16;
@@ -124,8 +123,8 @@ impl DNSQuery {
         &self.header.id
     }
 
-    pub fn get_domains(&self) -> Vec<String> {
-        self.questions.iter().map(|q| String::from_utf8(q.name.clone()).unwrap()).collect()
+    pub fn get_domain(&self) -> &Vec<u8> {
+        &self.questions[0].name
     }
 }
 
@@ -198,38 +197,58 @@ impl From<PacketBuffer> for DNSAnswer {
     }
 }
 
-impl Into<Vec<DNSCacheRecord>> for DNSAnswer {
-    fn into(self) -> Vec<DNSCacheRecord> {
-        todo!()
+impl Into<DNSCacheRecord> for DNSAnswer {
+    fn into(self) -> DNSCacheRecord {
+        let domain = &self.questions[0].name;
+        if let Some(r) = self.answers.iter()
+            .find(|a| a.name.eq(domain)) {
+            if r._type == 5 {
+                let record = self.answers.iter()
+                    .find(|a| a.name.eq(&r.data))
+                    .expect("错误的dns应答");
+                DNSCacheRecord {
+                    domain: domain.clone(),
+                    address: record.data.clone(),
+                    ttl: record.ttl.clone() as u128,
+                    last_used_time: get_timestamp(),
+                }
+            } else {
+                DNSCacheRecord {
+                    domain: domain.clone(),
+                    address: r.data.clone(),
+                    ttl: r.ttl.clone() as u128,
+                    last_used_time: get_timestamp(),
+                }
+            }
+        } else {
+            panic!("错误的dns应答")
+        }
     }
 }
 
 impl DNSAnswer {
-    pub fn from_cache(id: u16, records: Vec<&DNSCacheRecord>) -> Self {
-        let len = records.len() as u16;
+    pub fn from_cache(id: u16, record: &DNSCacheRecord) -> Self {
         let mut questions = Vec::new();
         let mut answers = Vec::new();
-        for record in records {
-            questions.push(Question {
-                name: record.get_domain().clone().into_bytes(),
-                _type: 1,
-                class: 1,
-            });
-            answers.push(ResourceRecord {
-                name: record.get_domain().clone().into_bytes(),
-                _type: 1,
-                class: 1,
-                ttl: record.get_ttl().clone() as u32,
-                data_len: 4,
-                data: record.get_address().clone().into_bytes(),
-            })
-        }
+        questions.push(Question {
+            name: record.get_domain().clone(),
+            _type: 1,
+            class: 1,
+        });
+        answers.push(ResourceRecord {
+            name: record.get_domain().clone(),
+            _type: 1,
+            class: 1,
+            ttl: record.get_ttl().clone() as u32,
+            data_len: 4,
+            data: record.get_address().clone(),
+        });
         DNSAnswer {
             header: Header {
                 id,
                 flags: 0x8180,
-                question_count: len,
-                answer_count: len,
+                question_count: 1,
+                answer_count: 1,
                 authority_count: 0,
                 additional_count: 0,
             },
@@ -247,9 +266,5 @@ impl DNSAnswer {
             vec.extend(a.to_v8_vec())
         });
         vec
-    }
-
-    pub fn get_id(&self) -> &u16 {
-        &self.header.id
     }
 }

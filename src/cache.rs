@@ -1,43 +1,32 @@
 use std::collections::BTreeMap;
-use std::time::{SystemTime, UNIX_EPOCH};
 use crate::protocol::{DNSAnswer, DNSQuery};
-use std::cell::RefCell;
+use std::sync::{RwLock};
+use crate::timer::get_timestamp;
 
 pub struct DNSCacheManager {
-    records: BTreeMap<String, DNSCacheRecord>,
+    inner: RwLock<DnsCacheInner>,
 }
 
-#[derive(Clone)]
+pub struct DnsCacheInner {
+    records: BTreeMap<Vec<u8>, DNSCacheRecord>,
+}
+
 pub struct DNSCacheRecord {
-    domain: String,
-    address: String,
-    ttl: u128,
-    last_used_time: u128,
-}
-
-fn get_timestamp() -> u128 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("Time went backwards").as_millis()
+    pub domain: Vec<u8>,
+    pub address: Vec<u8>,
+    pub ttl: u128,
+    pub last_used_time: u128,
 }
 
 impl DNSCacheRecord {
-    fn from() -> Self {
-        DNSCacheRecord {
-            domain: "".to_string(),
-            address: "".to_string(),
-            ttl: 0,
-            last_used_time: 0,
-        }
-    }
     fn is_expired(&self) -> bool {
-        (get_timestamp() - self.last_used_time) > self.ttl
+        (get_timestamp() - self.last_used_time) > self.ttl * 1000
     }
 
-    pub fn get_domain(&self) -> &String {
+    pub fn get_domain(&self) -> &Vec<u8> {
         &self.domain
     }
-    pub fn get_address(&self) -> &String {
+    pub fn get_address(&self) -> &Vec<u8> {
         &self.address
     }
 
@@ -46,48 +35,41 @@ impl DNSCacheRecord {
     }
 }
 
+impl DnsCacheInner {
+    pub fn store(&mut self, record: DNSCacheRecord) {
+        self.records.insert(record.domain.clone(), record);
+    }
+    pub fn get(&mut self, domain: &Vec<u8>) -> Option<&DNSCacheRecord> {
+        if let Some(r) = self.records.get_mut(domain) {
+            if r.is_expired() {
+                self.records.remove(domain);
+            } else {
+                r.last_used_time = get_timestamp();
+            }
+        }
+        self.records.get(domain)
+    }
+}
+
+unsafe impl Sync for DNSCacheManager {}
+
 impl DNSCacheManager {
     pub fn new() -> Self {
         DNSCacheManager {
-            records: Default::default()
+            inner: RwLock::new(DnsCacheInner { records: Default::default() }),
         }
-    }
-    pub fn store(&mut self, mut records: Vec<DNSCacheRecord>) {
-        for record in records {
-            self.records.insert(record.domain.clone(), record);
-        }
-    }
-    pub fn get(&self, domain: &String) -> Option<&DNSCacheRecord> {
-        self.records.get(domain)
-    }
-    pub fn remove(&mut self, domain: &String) {
-        self.records.remove(domain);
     }
 }
 
-pub fn get_answer(cache_manager: &mut DNSCacheManager, query: &DNSQuery) -> Option<DNSAnswer> {
-    let mut records = Vec::new();
-    let mut expired_domains = Vec::new();
-    for domain in query.get_domains() {
-        if let Some(r) = cache_manager.get(&domain) {
-            if r.is_expired() {
-                expired_domains.push(domain)
-            } else {
-                records.push(r);
-            }
-        }
-    }
-    let result = if !records.is_empty() {
-        Some(DNSAnswer::from_cache(query.get_id().clone(), records))
-    } else {
-        None
-    };
-    for domain in expired_domains {
-        cache_manager.remove(&domain);
-    }
-    result
+lazy_static! {
+    static ref CACHE_MANAGER: DNSCacheManager = DNSCacheManager::new();
 }
 
-pub fn store_answer(cache_manager: &mut DNSCacheManager, answer: DNSAnswer) {
-    cache_manager.store(answer.into());
+pub fn get_answer(query: &DNSQuery) -> Option<DNSAnswer> {
+    CACHE_MANAGER.inner.write().unwrap().get(query.get_domain())
+        .map(|r| DNSAnswer::from_cache(query.get_id().clone(), r))
+}
+
+pub fn store_answer(answer: DNSAnswer) {
+    CACHE_MANAGER.inner.write().unwrap().store(answer.into());
 }

@@ -2,15 +2,18 @@ mod buffer;
 mod protocol;
 mod cache;
 mod scheduler;
+mod timer;
 
 use std::net::{UdpSocket, SocketAddr};
 use crate::buffer::PacketBuffer;
-use std::collections::HashMap;
 use crate::protocol::{DNSQuery, DNSAnswer};
-use crate::cache::{DNSCacheManager, get_answer, store_answer};
+use crate::cache::{get_answer, store_answer};
 use crossbeam_channel::bounded;
 use std::thread;
 use std::sync::Arc;
+
+#[macro_use]
+extern crate lazy_static;
 
 //dig @127.0.0.1 -p 2053 www.baidu.com
 fn main() {
@@ -23,15 +26,19 @@ fn main() {
             let socket = UdpSocket::bind(("0.0.0.0", base_port)).unwrap();
             loop {
                 let (client, src, query) = receiver.recv().unwrap();
+                if let Some(answer) = get_answer(&query) {
+                    client.send_to(answer.to_u8_vec().as_slice(), src).unwrap();
+                } else {
+                    socket.send_to(query.to_u8_vec().as_slice(), ("114.114.114.114", 53)).unwrap();
 
-                socket.send_to(query.to_u8_vec().as_slice(), ("114.114.114.114", 53)).unwrap();
+                    let mut buffer = PacketBuffer::new();
+                    socket.recv(buffer.as_mut_slice()).unwrap();
 
-                let mut buffer = PacketBuffer::new();
-                socket.recv(buffer.as_mut_slice()).unwrap();
-
-                let answer = DNSAnswer::from(buffer);
-                println!("dns answer: {:?}", answer);
-                client.send_to(answer.to_u8_vec().as_slice(), src).unwrap();
+                    let answer = DNSAnswer::from(buffer);
+                    println!("dns answer: {:?}", answer);
+                    client.send_to(answer.to_u8_vec().as_slice(), src).unwrap();
+                    store_answer(answer);
+                }
             }
         });
         base_port += 1;
