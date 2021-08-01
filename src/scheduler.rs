@@ -33,7 +33,7 @@ impl<T: 'static + Task + Send> TaskScheduler<T> {
     }
 
     fn is_need_increase_thread(&self) -> bool {
-        self.is_thread_full() && self.sender.len() > 50
+        (!self.is_thread_full()) && self.sender.len() > 50
     }
 
     pub fn publish(&mut self, task: T) {
