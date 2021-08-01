@@ -3,54 +3,67 @@ mod protocol;
 mod cache;
 mod scheduler;
 mod timer;
+mod socket;
 
 use std::net::{UdpSocket, SocketAddr};
 use crate::buffer::PacketBuffer;
 use crate::protocol::{DNSQuery, DNSAnswer};
 use crate::cache::{get_answer, store_answer};
-use crossbeam_channel::bounded;
-use std::thread;
 use std::sync::Arc;
+use crate::scheduler::{TaskScheduler, Task};
+use crate::socket::UdpSocketPool;
 
 #[macro_use]
 extern crate lazy_static;
 
+struct DnsQueryTask {
+    o_socket: Arc<UdpSocket>,
+    n_socket: Arc<UdpSocket>,
+    src: SocketAddr,
+    query: DNSQuery,
+}
+
+impl Task for DnsQueryTask {
+    fn run(&self) {
+        if let Some(answer) = get_answer(&self.query) {
+            self.o_socket.send_to(answer.to_u8_vec().as_slice(), self.src).unwrap();
+        } else {
+            self.n_socket.send_to(self.query.to_u8_vec().as_slice(),
+                                  ("114.114.114.114", 53)).unwrap();
+            let mut buffer = PacketBuffer::new();
+            self.n_socket.recv(buffer.as_mut_slice()).unwrap();
+            let answer = DNSAnswer::from(buffer);
+            println!("dns answer: {:?}", answer);
+            self.o_socket.send_to(answer.to_u8_vec().as_slice(), self.src).unwrap();
+            store_answer(answer);
+        }
+    }
+}
+
+impl DnsQueryTask {
+    fn from(o_socket: Arc<UdpSocket>, n_socket: Arc<UdpSocket>, src: SocketAddr, query: DNSQuery) -> Self {
+        DnsQueryTask {
+            o_socket,
+            n_socket,
+            src,
+            query,
+        }
+    }
+}
+
 //dig @127.0.0.1 -p 2053 www.baidu.com
 fn main() {
-    let (s, r) =
-        bounded::<(Arc<UdpSocket>, SocketAddr, DNSQuery)>(1000);
-    let mut base_port = 11153;
-    for _ in 0..4 {
-        let receiver = r.clone();
-        thread::spawn(move || {
-            let socket = UdpSocket::bind(("0.0.0.0", base_port)).unwrap();
-            loop {
-                let (client, src, query) = receiver.recv().unwrap();
-                if let Some(answer) = get_answer(&query) {
-                    client.send_to(answer.to_u8_vec().as_slice(), src).unwrap();
-                } else {
-                    socket.send_to(query.to_u8_vec().as_slice(), ("114.114.114.114", 53)).unwrap();
-
-                    let mut buffer = PacketBuffer::new();
-                    socket.recv(buffer.as_mut_slice()).unwrap();
-
-                    let answer = DNSAnswer::from(buffer);
-                    println!("dns answer: {:?}", answer);
-                    client.send_to(answer.to_u8_vec().as_slice(), src).unwrap();
-                    store_answer(answer);
-                }
-            }
-        });
-        base_port += 1;
-    }
-
     let arc_socket = Arc::new(UdpSocket::bind(("0.0.0.0", 2053)).unwrap());
     let socket = arc_socket.clone();
+    let mut scheduler = TaskScheduler::from(4);
+    let socket_pool = UdpSocketPool::new();
     loop {
         let mut buffer = PacketBuffer::new();
         let (_, src) = socket.recv_from(buffer.as_mut_slice()).unwrap();
         let query = DNSQuery::from(buffer);
         println!("dns query: {:?}", query);
-        s.send((arc_socket.clone(), src, query)).unwrap();
+        scheduler.publish(DnsQueryTask::from(
+            arc_socket.clone(), socket_pool.get_socket(), src, query))
     }
 }
+
