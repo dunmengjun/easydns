@@ -54,12 +54,11 @@ impl DnsQueryTask {
 //dig @127.0.0.1 -p 2053 www.baidu.com
 fn main() {
     let arc_socket = Arc::new(UdpSocket::bind(("0.0.0.0", 2053)).unwrap());
-    let socket = arc_socket.clone();
     let mut scheduler = TaskScheduler::from(4);
     let socket_pool = UdpSocketPool::new();
     loop {
         let mut buffer = PacketBuffer::new();
-        let (_, src) = socket.recv_from(buffer.as_mut_slice()).unwrap();
+        let (_, src) = arc_socket.recv_from(buffer.as_mut_slice()).unwrap();
         let query = DNSQuery::from(buffer);
         println!("dns query: {:?}", query);
         scheduler.publish(DnsQueryTask::from(
