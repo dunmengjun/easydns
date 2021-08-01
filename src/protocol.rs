@@ -1,5 +1,8 @@
 use std::fmt::{Debug};
 use crate::buffer::PacketBuffer;
+use crate::cache::DNSCacheRecord;
+use std::collections::HashMap;
+use std::net::SocketAddr;
 
 const C_FACTOR: u8 = 192u8;
 const DC_FACTOR: u16 = 16383u16;
@@ -97,11 +100,11 @@ pub struct DNSQuery {
 }
 
 impl DNSQuery {
-    pub fn from(mut cursor: PacketBuffer) -> Self {
-        let header = Header::from(&mut cursor);
+    pub fn from(mut buffer: PacketBuffer) -> Self {
+        let header = Header::from(&mut buffer);
         let mut questions = Vec::new();
         (0..header.question_count as usize).into_iter().for_each(|_| {
-            questions.push(Question::from(&mut cursor));
+            questions.push(Question::from(&mut buffer));
         });
         DNSQuery {
             header,
@@ -119,6 +122,10 @@ impl DNSQuery {
 
     pub fn get_id(&self) -> &u16 {
         &self.header.id
+    }
+
+    pub fn get_domains(&self) -> Vec<String> {
+        self.questions.iter().map(|q| String::from_utf8(q.name.clone()).unwrap()).collect()
     }
 }
 
@@ -172,8 +179,8 @@ pub struct DNSAnswer {
     answers: Vec<ResourceRecord>,
 }
 
-impl DNSAnswer {
-    pub fn from(mut buffer: PacketBuffer) -> Self {
+impl From<PacketBuffer> for DNSAnswer {
+    fn from(mut buffer: PacketBuffer) -> Self {
         let header = Header::from(&mut buffer);
         let mut questions = Vec::new();
         (0..header.question_count as usize).into_iter().for_each(|_| {
@@ -187,6 +194,47 @@ impl DNSAnswer {
             header,
             questions,
             answers: resources,
+        }
+    }
+}
+
+impl Into<Vec<DNSCacheRecord>> for DNSAnswer {
+    fn into(self) -> Vec<DNSCacheRecord> {
+        todo!()
+    }
+}
+
+impl DNSAnswer {
+    pub fn from_cache(id: u16, records: Vec<&DNSCacheRecord>) -> Self {
+        let len = records.len() as u16;
+        let mut questions = Vec::new();
+        let mut answers = Vec::new();
+        for record in records {
+            questions.push(Question {
+                name: record.get_domain().clone().into_bytes(),
+                _type: 1,
+                class: 1,
+            });
+            answers.push(ResourceRecord {
+                name: record.get_domain().clone().into_bytes(),
+                _type: 1,
+                class: 1,
+                ttl: record.get_ttl().clone() as u32,
+                data_len: 4,
+                data: record.get_address().clone().into_bytes(),
+            })
+        }
+        DNSAnswer {
+            header: Header {
+                id,
+                flags: 0x8180,
+                question_count: len,
+                answer_count: len,
+                authority_count: 0,
+                additional_count: 0,
+            },
+            questions,
+            answers,
         }
     }
     pub fn to_u8_vec(&self) -> Vec<u8> {
