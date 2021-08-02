@@ -55,6 +55,12 @@ impl DnsQueryTask {
 
 //dig @127.0.0.1 -p 2053 www.baidu.com
 fn main() -> Result<()> {
+    let signal = unsafe {
+        signal_hook_registry::register(2, || {
+            println!("xxxx")
+        })
+    };
+    println!("{:?}", signal.unwrap());
     let arc_socket = Arc::new(UdpSocket::bind(("0.0.0.0", 2053))?);
     let mut scheduler = TaskScheduler::from(4);
     let mut socket_pool = UdpSocketPool::new();
