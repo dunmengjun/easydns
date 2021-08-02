@@ -71,3 +71,5 @@ Type "apropos word" to search for commands related to "word".
 Remote debugging using localhost:1234
 ```
 在clion这种IDE上可以以Remote GDB Server来配置，核心就是上面两个命令
+
+ps: 程序中不能禁用panic的栈展开，不然一些多线程保障机制无法完成 
