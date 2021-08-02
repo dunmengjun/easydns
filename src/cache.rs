@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use crate::protocol::{DNSAnswer, DNSQuery};
 use std::sync::{RwLock};
 use crate::timer::get_timestamp;
+use crate::error::Result;
 
 pub struct DNSCacheManager {
     inner: RwLock<DnsCacheInner>,
@@ -65,11 +66,11 @@ lazy_static! {
     static ref CACHE_MANAGER: DNSCacheManager = DNSCacheManager::new();
 }
 
-pub fn get_answer(query: &DNSQuery) -> Option<DNSAnswer> {
-    CACHE_MANAGER.inner.write().unwrap().get(query.get_domain())
-        .map(|r| DNSAnswer::from_cache(query.get_id().clone(), r))
+pub fn get_answer(query: &DNSQuery) -> Result<Option<DNSAnswer>> {
+    Ok(CACHE_MANAGER.inner.write()?.get(query.get_domain())
+        .map(|r| DNSAnswer::from_cache(query.get_id().clone(), r)))
 }
 
-pub fn store_answer(answer: DNSAnswer) {
-    CACHE_MANAGER.inner.write().unwrap().store(answer.into());
+pub fn store_answer(answer: DNSAnswer) -> Result<()> {
+    Ok(CACHE_MANAGER.inner.write()?.store(answer.into()))
 }
