@@ -8,7 +8,6 @@ edition = "2018"
 [dependencies]
 crossbeam-channel = "0.5"
 lazy_static = "1.4.0"
-rand = "0.8.4"
 
 [package.metadata.scripts]
 runner = """qemu-mipsel -L /home/dmj/mipsel-linux-uclibc/mipsel-linux-uclibc/sysroot {0}"""

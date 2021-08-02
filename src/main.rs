@@ -57,14 +57,14 @@ impl DnsQueryTask {
 fn main() -> Result<()> {
     let arc_socket = Arc::new(UdpSocket::bind(("0.0.0.0", 2053))?);
     let mut scheduler = TaskScheduler::from(4);
-    let socket_pool = UdpSocketPool::new();
+    let mut socket_pool = UdpSocketPool::new();
     loop {
         let mut buffer = PacketBuffer::new();
         let (_, src) = arc_socket.recv_from(buffer.as_mut_slice())?;
         let query = DNSQuery::from(buffer);
         println!("dns query: {:?}", query);
         scheduler.publish(DnsQueryTask::from(
-            arc_socket.clone(), socket_pool.get_socket(), src, query))?;
+            arc_socket.clone(), socket_pool.take_socket(), src, query))?;
     }
 }
 

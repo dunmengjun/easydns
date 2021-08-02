@@ -3,8 +3,8 @@ runner = "cargo exec runner"
 linker = "/home/dmj/mipsel-linux-uclibc/bin/mipsel-linux-uclibc-cc"
 
 [profile.release]
-lto = true #优化体积
-opt-level = 'z'  # Optimize for size.
+lto = true
+opt-level = 'z'
 codegen-units = 1
 
 
