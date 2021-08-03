@@ -1,3 +1,5 @@
+#![feature(const_generics)]
+
 mod buffer;
 mod protocol;
 mod cache;
@@ -5,15 +7,17 @@ mod scheduler;
 mod timer;
 mod socket;
 mod error;
+mod system;
 
 use std::net::{UdpSocket, SocketAddr};
 use crate::buffer::PacketBuffer;
 use crate::protocol::{DNSQuery, DNSAnswer};
 use crate::cache::{get_answer, store_answer};
 use std::sync::Arc;
-use crate::scheduler::{TaskScheduler, Task};
+use crate::scheduler::{TaskScheduler, Task, TaskMsg};
 use crate::socket::UdpSocketPool;
 use crate::error::Result;
+use std::process;
 
 #[macro_use]
 extern crate lazy_static;
@@ -55,22 +59,23 @@ impl DnsQueryTask {
 
 //dig @127.0.0.1 -p 2053 www.baidu.com
 fn main() -> Result<()> {
-    let signal = unsafe {
-        signal_hook_registry::register(2, || {
-            println!("xxxx")
-        })
-    };
-    println!("{:?}", signal.unwrap());
     let arc_socket = Arc::new(UdpSocket::bind(("0.0.0.0", 2053))?);
     let mut scheduler = TaskScheduler::from(4);
     let mut socket_pool = UdpSocketPool::new();
+    let signal = unsafe {
+        signal_hook_registry::register(2, move || {
+            process::abort();
+        })
+    };
+    println!("main thread signa {:?}", signal);
     loop {
         let mut buffer = PacketBuffer::new();
         let (_, src) = arc_socket.recv_from(buffer.as_mut_slice())?;
         let query = DNSQuery::from(buffer);
         println!("dns query: {:?}", query);
-        scheduler.publish(DnsQueryTask::from(
-            arc_socket.clone(), socket_pool.take_socket(), src, query))?;
+        let task = DnsQueryTask::from(arc_socket.clone(),
+                                      socket_pool.take_socket(), src, query);
+        scheduler.publish(TaskMsg::Task(task))?;
     }
 }
 

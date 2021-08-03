@@ -1,32 +1,149 @@
-use std::{thread, panic};
+use std::{thread};
 use crossbeam_channel::{Sender, Receiver, bounded};
 use std::time::Duration;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-use std::panic::{RefUnwindSafe};
-use crate::error::{Result, PanicError};
-use std::error::Error;
+use crate::error::{Result};
+use std::cell::RefCell;
+use std::thread::JoinHandle;
+
+#[derive(Debug)]
+struct ThreadVec {
+    handlers: RefCell<Vec<Arc<HandleContainer>>>,
+}
+
+unsafe impl Sync for ThreadVec {}
+
+impl ThreadVec {
+    fn new() -> Self {
+        ThreadVec {
+            handlers: RefCell::new(vec![])
+        }
+    }
+    fn push(&self, thread: Arc<HandleContainer>) {
+        self.handlers.borrow_mut().push(thread);
+    }
+
+    fn join_all(&self) {
+        self.handlers.borrow().iter()
+            .filter(|c| { !c.is_empty() })
+            .map(|c| c.take_thread())
+            .for_each(|option| {
+                match option {
+                    Some(j) => {
+                        let id = j.thread().id();
+                        println!("has thread join {:?} started", id);
+                        //如果线程中出现panic，这里就会出错
+                        match j.join() {
+                            Ok(_) => {
+                                println!("has thread join {:?} ended", id);
+                            }
+                            Err(e) => {
+                                println!("join has error: {:?}", e);
+                            }
+                        }
+                    }
+                    None => {}
+                }
+            });
+    }
+}
+
+#[derive(Debug)]
+struct HandleContainer {
+    slot: RefCell<Vec<JoinHandle<()>>>,
+}
+
+unsafe impl Sync for HandleContainer {}
+
+impl HandleContainer {
+    fn new() -> Self {
+        HandleContainer {
+            slot: RefCell::new(Vec::with_capacity(1))
+        }
+    }
+    fn store(&self, join: JoinHandle<()>) {
+        self.slot.borrow_mut().push(join);
+    }
+
+    fn clear(&self) {
+        self.slot.borrow_mut().clear();
+    }
+
+    fn is_empty(&self) -> bool {
+        self.slot.borrow().is_empty()
+    }
+
+    fn take_thread(&self) -> Option<JoinHandle<()>> {
+        self.slot.borrow_mut().pop()
+    }
+}
+
+struct ThreadSentinel {
+    container: Arc<HandleContainer>,
+    c_num: Arc<AtomicUsize>,
+}
+
+impl ThreadSentinel {
+    fn from(c_num: Arc<AtomicUsize>, container: Arc<HandleContainer>) -> Self {
+        c_num.fetch_add(1, Ordering::SeqCst);
+        ThreadSentinel {
+            container,
+            c_num,
+        }
+    }
+}
+
+impl Drop for ThreadSentinel {
+    fn drop(&mut self) {
+        println!("Sentinel drop started in thread: {:?}", thread::current().id());
+        self.c_num.fetch_sub(1, Ordering::SeqCst);
+        self.container.clear();
+        println!("Sentinel dropped in thread: {:?}", thread::current().id());
+    }
+}
 
 pub trait Task {
     fn run(&self) -> Result<()>;
 }
 
-pub struct TaskScheduler<T> {
-    t_num: usize,
-    sender: Sender<T>,
-    receiver: Receiver<T>,
-    c_num: Arc<AtomicUsize>,
+pub enum TaskMsg<T> {
+    Task(T),
+    End,
 }
 
-impl<T: 'static + Task + Send + RefUnwindSafe> TaskScheduler<T> {
+pub struct TaskScheduler<T> {
+    t_num: usize,
+    sender: Sender<TaskMsg<T>>,
+    receiver: Receiver<TaskMsg<T>>,
+    c_num: Arc<AtomicUsize>,
+    thread_vec: Arc<ThreadVec>,
+}
+
+impl<T: 'static + Task + Send> TaskScheduler<T> {
     pub fn from(t_num: usize) -> Self {
-        let (sender, receiver) = bounded::<T>(1000);
+        let (sender, receiver) = bounded(1000);
         let scheduler = TaskScheduler {
             t_num,
             sender,
             receiver,
             c_num: Arc::new(AtomicUsize::new(0)),
+            thread_vec: Arc::new(ThreadVec::new()),
         };
+        //设置线程池在ctrl+c信号到来时应该发送结束消息并等待所有线程完成他们的任务
+        let arc_thread_vec = scheduler.thread_vec.clone();
+        let arc_sender = scheduler.sender.clone();
+        let c_num = scheduler.c_num.clone();
+        let signal = unsafe {
+            signal_hook_registry::register(2, move || {
+                let num = c_num.load(Ordering::Relaxed);
+                for _ in 0..num * 2 {
+                    arc_sender.send(TaskMsg::End).unwrap();
+                }
+                arc_thread_vec.join_all();
+            })
+        };
+        println!("{:?}", signal.unwrap());
         scheduler.start();
         scheduler
     }
@@ -39,7 +156,7 @@ impl<T: 'static + Task + Send + RefUnwindSafe> TaskScheduler<T> {
         (!self.is_thread_full()) && self.sender.len() > 50
     }
 
-    pub fn publish(&mut self, task: T) -> Result<()> {
+    pub fn publish(&mut self, task: TaskMsg<T>) -> Result<()> {
         if self.is_need_increase_thread() {
             self.create_helper_thread();
         }
@@ -49,50 +166,57 @@ impl<T: 'static + Task + Send + RefUnwindSafe> TaskScheduler<T> {
     fn create_main_thread(&self) {
         let receiver = self.receiver.clone();
         let c_num = self.c_num.clone();
-        thread::spawn(move || {
-            c_num.fetch_add(1, Ordering::SeqCst);
+        let container = Arc::new(HandleContainer::new());
+        let arc_container = container.clone();
+        let handler = thread::spawn(move || {
+            let _sentinel = ThreadSentinel::from(c_num, arc_container);
             loop {
-                if let Err(_) = TaskScheduler::run_task(receiver.recv()) {
-                    break;
+                match receiver.recv() {
+                    Ok(task_msg) => {
+                        match task_msg {
+                            TaskMsg::Task(task) => { task.run().unwrap(); }
+                            TaskMsg::End => break
+                        }
+                    }
+                    Err(e) => {
+                        println!("thread {:?}, recv error {}", thread::current().id(), e);
+                        break;
+                    }
                 }
             }
-            c_num.fetch_sub(1, Ordering::SeqCst);
         });
+        container.store(handler);
+        self.thread_vec.push(container);
     }
 
     fn create_helper_thread(&self) {
         let receiver = self.receiver.clone();
         let c_num = self.c_num.clone();
-        thread::spawn(move || {
-            c_num.fetch_add(1, Ordering::SeqCst);
+        let container = Arc::new(HandleContainer::new());
+        let arc_container = container.clone();
+        let handler = thread::spawn(move || {
+            let _sentinel = ThreadSentinel::from(c_num, arc_container);
             loop {
-                if let Err(_) = TaskScheduler::run_task(
-                    receiver.recv_timeout(Duration::from_secs(60))) {
-                    break;
+                match receiver.recv_timeout(Duration::from_secs(60)) {
+                    Ok(task_msg) => {
+                        match task_msg {
+                            TaskMsg::Task(task) => { task.run().unwrap(); }
+                            TaskMsg::End => break
+                        }
+                    }
+                    Err(e) => {
+                        println!("thread {:?}, recv error {}", thread::current().id(), e);
+                        break;
+                    }
                 }
             }
-            c_num.fetch_sub(1, Ordering::SeqCst);
         });
-    }
-
-    fn run_task<R: 'static + Error>(result: std::result::Result<T, R>) -> Result<()> {
-        if let Ok(task) = result {
-            //把任务里面的panic hold住，不让线程直接挂了，导致后续线程计数没法更新
-            match panic::catch_unwind(|| { task.run().unwrap() }) {
-                Ok(_) => Ok(()),
-                Err(e) => {
-                    println!("thread {:?} panic by error {:?}",
-                             thread::current().id(), e);
-                    Err(Box::new(PanicError))
-                }
-            }
-        } else {
-            Err(Box::new(result.err().unwrap()))
-        }
+        container.store(handler);
+        self.thread_vec.push(container);
     }
 
     fn is_started(&self) -> bool {
-        self.c_num.load(Ordering::SeqCst) > 0
+        self.c_num.load(Ordering::Relaxed) > 0
     }
 
     fn start(&self) {
