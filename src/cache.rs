@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use crate::protocol::{DNSAnswer, DNSQuery};
 use std::sync::{RwLock};
 use crate::timer::get_timestamp;
-use crate::error::Result;
+use crate::system::{AbortFunc, Result};
 
 pub struct DNSCacheManager {
     inner: RwLock<DnsCacheInner>,
@@ -73,4 +73,10 @@ pub fn get_answer(query: &DNSQuery) -> Result<Option<DNSAnswer>> {
 
 pub fn store_answer(answer: DNSAnswer) -> Result<()> {
     Ok(CACHE_MANAGER.inner.write()?.store(answer.into()))
+}
+
+pub fn get_abort_action() -> AbortFunc {
+    Box::new(move || {
+        println!("缓存abort处理成功!");
+    })
 }

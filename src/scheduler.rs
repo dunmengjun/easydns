@@ -3,9 +3,9 @@ use crossbeam_channel::{Sender, Receiver, bounded};
 use std::time::Duration;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-use crate::error::{Result};
 use std::cell::RefCell;
 use std::thread::JoinHandle;
+use crate::system::{Result, AbortFunc};
 
 #[derive(Debug)]
 struct ThreadVec {
@@ -130,20 +130,6 @@ impl<T: 'static + Task + Send> TaskScheduler<T> {
             c_num: Arc::new(AtomicUsize::new(0)),
             thread_vec: Arc::new(ThreadVec::new()),
         };
-        //设置线程池在ctrl+c信号到来时应该发送结束消息并等待所有线程完成他们的任务
-        let arc_thread_vec = scheduler.thread_vec.clone();
-        let arc_sender = scheduler.sender.clone();
-        let c_num = scheduler.c_num.clone();
-        let signal = unsafe {
-            signal_hook_registry::register(2, move || {
-                let num = c_num.load(Ordering::Relaxed);
-                for _ in 0..num * 2 {
-                    arc_sender.send(TaskMsg::End).unwrap();
-                }
-                arc_thread_vec.join_all();
-            })
-        };
-        println!("{:?}", signal.unwrap());
         scheduler.start();
         scheduler
     }
@@ -224,5 +210,20 @@ impl<T: 'static + Task + Send> TaskScheduler<T> {
             return;
         }
         self.create_main_thread();
+    }
+
+    pub fn get_abort_action(&self) -> AbortFunc {
+        //设置线程池在ctrl+c信号到来时应该发送结束消息并等待所有线程完成他们的任务
+        let arc_thread_vec = self.thread_vec.clone();
+        let arc_sender = self.sender.clone();
+        let c_num = self.c_num.clone();
+        Box::new(move || {
+            let num = c_num.load(Ordering::Relaxed);
+            for _ in 0..num * 2 {
+                arc_sender.send(TaskMsg::End).unwrap();
+            }
+            arc_thread_vec.join_all();
+            println!("线程全部完整退出")
+        })
     }
 }
