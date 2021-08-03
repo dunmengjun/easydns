@@ -3,6 +3,7 @@ use crate::protocol::{DNSAnswer, DNSQuery};
 use std::sync::{RwLock};
 use crate::timer::get_timestamp;
 use crate::system::{AbortFunc, Result};
+use once_cell::sync::Lazy;
 
 pub struct DNSCacheManager {
     inner: RwLock<DnsCacheInner>,
@@ -52,8 +53,6 @@ impl DnsCacheInner {
     }
 }
 
-unsafe impl Sync for DNSCacheManager {}
-
 impl DNSCacheManager {
     pub fn new() -> Self {
         DNSCacheManager {
@@ -62,9 +61,9 @@ impl DNSCacheManager {
     }
 }
 
-lazy_static! {
-    static ref CACHE_MANAGER: DNSCacheManager = DNSCacheManager::new();
-}
+static CACHE_MANAGER: Lazy<DNSCacheManager> = Lazy::new(|| {
+    DNSCacheManager::new()
+});
 
 pub fn get_answer(query: &DNSQuery) -> Result<Option<DNSAnswer>> {
     Ok(CACHE_MANAGER.inner.write()?.get(query.get_domain())

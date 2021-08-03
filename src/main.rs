@@ -19,9 +19,6 @@ use crate::socket::UdpSocketPool;
 use crate::system::Result;
 use crate::system::register_abort_action;
 
-#[macro_use]
-extern crate lazy_static;
-
 struct DnsQueryTask {
     o_socket: Arc<UdpSocket>,
     n_socket: Arc<UdpSocket>,
