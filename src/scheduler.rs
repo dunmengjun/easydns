@@ -29,21 +29,15 @@ impl ThreadVec {
             .filter(|c| { !c.is_empty() })
             .map(|c| c.take_thread())
             .for_each(|option| {
-                match option {
-                    Some(j) => {
-                        let id = j.thread().id();
-                        println!("has thread join {:?} started", id);
-                        //如果线程中出现panic，这里就会出错
-                        match j.join() {
-                            Ok(_) => {
-                                println!("has thread join {:?} ended", id);
-                            }
-                            Err(e) => {
-                                println!("join has error: {:?}", e);
-                            }
-                        }
-                    }
-                    None => {}
+                if let Some(handler) = option {
+                    let id = handler.thread().id();
+                    println!("has thread join {:?} started", id);
+                    //如果线程中出现panic，这里就会出错
+                    let _result = handler.join().map(|_| {
+                        println!("has thread join {:?} ended", id);
+                    }).map_err(|e| {
+                        println!("join has error: {:?}", e);
+                    });
                 }
             });
     }
@@ -151,39 +145,33 @@ impl<T: 'static + Task + Send> TaskScheduler<T> {
 
     fn create_main_thread(&self) {
         let receiver = self.receiver.clone();
-        let c_num = self.c_num.clone();
-        let container = Arc::new(HandleContainer::new());
-        let arc_container = container.clone();
-        let handler = thread::spawn(move || {
-            let _sentinel = ThreadSentinel::from(c_num, arc_container);
-            loop {
-                match receiver.recv() {
-                    Ok(task_msg) => {
-                        match task_msg {
-                            TaskMsg::Task(task) => { task.run().unwrap(); }
-                            TaskMsg::End => break
-                        }
-                    }
-                    Err(e) => {
-                        println!("thread {:?}, recv error {}", thread::current().id(), e);
-                        break;
-                    }
-                }
+        self.create_thread(move || {
+            match receiver.recv() {
+                Ok(msg) => { Ok(msg) }
+                Err(e) => { Err(format!("{}", e).into()) }
             }
         });
-        container.store(handler);
-        self.thread_vec.push(container);
     }
 
     fn create_helper_thread(&self) {
         let receiver = self.receiver.clone();
+        self.create_thread(move || {
+            match receiver.recv_timeout(Duration::from_secs(60)) {
+                Ok(msg) => { Ok(msg) }
+                Err(e) => { Err(format!("{}", e).into()) }
+            }
+        });
+    }
+
+    fn create_thread<F>(&self, get_msg_func: F)
+        where F: Fn() -> Result<TaskMsg<T>> + Send + 'static {
         let c_num = self.c_num.clone();
         let container = Arc::new(HandleContainer::new());
         let arc_container = container.clone();
         let handler = thread::spawn(move || {
             let _sentinel = ThreadSentinel::from(c_num, arc_container);
             loop {
-                match receiver.recv_timeout(Duration::from_secs(60)) {
+                match get_msg_func() {
                     Ok(task_msg) => {
                         match task_msg {
                             TaskMsg::Task(task) => { task.run().unwrap(); }

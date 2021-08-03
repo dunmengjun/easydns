@@ -3,7 +3,7 @@ use std::sync::{Arc};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::error::Error;
 
-pub type Result<T> = std::result::Result<T, Box<dyn Error>>;
+pub type Result<T> = core::result::Result<T, Box<dyn Error>>;
 pub type AbortFunc = Box<dyn Fn() + Sync + Send + 'static>;
 
 pub const SIGINT: i32 = 2;
@@ -17,11 +17,11 @@ pub fn register_abort_action<const N: usize>(actions: [AbortFunc; N]) {
     unsafe {
         signal_hook_registry::register(SIGINT, move || {
             run_actions(actions1.clone());
-            process::abort();
+            process::exit(0);
         }).unwrap();
         signal_hook_registry::register(SIGTERM, move || {
             run_actions(actions2.clone());
-            process::abort();
+            process::exit(0);
         }).unwrap();
     };
 }
