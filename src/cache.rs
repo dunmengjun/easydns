@@ -5,6 +5,11 @@ use once_cell::sync::Lazy;
 use dashmap::DashMap;
 use std::collections::hash_map::RandomState;
 use dashmap::mapref::one::{Ref};
+use std::fs::File;
+use std::io::{Write, Read};
+
+const F_DELIMITER: u8 = '|' as u8;
+const F_SPACE: u8 = ' ' as u8;
 
 pub struct DNSCacheManager {
     records: DashMap<Vec<u8>, DNSCacheRecord>,
@@ -49,16 +54,51 @@ impl DNSCacheRecord {
         self.ttl = self.ttl - (current_time - self.last_used_time);
         self.last_used_time = current_time;
     }
+
+    fn to_file_bytes(&self) -> Vec<u8> {
+        let mut vec = Vec::<u8>::new();
+        vec.extend(&self.domain);
+        vec.push(F_DELIMITER);
+        vec.extend(&self.address);
+        vec.push(F_DELIMITER);
+        vec.extend(&(self.ttl as u32).to_be_bytes());
+        vec.push(F_DELIMITER);
+        vec.extend(&self.last_used_time.to_be_bytes());
+        vec.push(F_SPACE);
+        vec
+    }
+
+    fn from_bytes(bytes: &[u8]) -> Self {
+        let split: Vec<&[u8]> = bytes.split(|e| F_DELIMITER == *e).collect();
+        let domain = Vec::<u8>::from(split[0]);
+        let address = Vec::<u8>::from(split[1]);
+        let mut buf = [0u8; 4];
+        for i in 0..4 {
+            buf[i] = split[2][i]
+        }
+        let ttl = u32::from_be_bytes(buf) as u128;
+        let mut buf = [0u8; 16];
+        for i in 0..16 {
+            buf[i] = split[3][i];
+        }
+        let last_used_time = u128::from_be_bytes(buf);
+        DNSCacheRecord {
+            domain,
+            address,
+            ttl,
+            last_used_time,
+        }
+    }
 }
 
 impl DNSCacheManager {
-    pub fn from(limit_len: usize) -> Self {
+    fn from(limit_len: usize) -> Self {
         DNSCacheManager {
             records: Default::default(),
             limit_len,
         }
     }
-    pub fn store(&self, record: DNSCacheRecord) {
+    fn store(&self, record: DNSCacheRecord) {
         //如果缓存超过了限制的大小，则删除掉十分之一的快过期的记录
         if self.records.len() >= self.limit_len {
             let vec = &mut Vec::new();
@@ -72,7 +112,7 @@ impl DNSCacheManager {
         }
         self.records.insert(record.domain.clone(), record);
     }
-    pub fn get(&self, domain: &Vec<u8>) -> Option<Ref<Vec<u8>, DNSCacheRecord, RandomState>> {
+    fn get(&self, domain: &Vec<u8>) -> Option<Ref<Vec<u8>, DNSCacheRecord, RandomState>> {
         self.records.remove_if(domain, |_, v| {
             v.is_expired()
         });
@@ -81,10 +121,46 @@ impl DNSCacheManager {
             e.downgrade()
         })
     }
+    fn to_file_bytes(&self) -> Vec<u8> {
+        let mut vec = Vec::new();
+        self.records.iter().for_each(|e| {
+            vec.extend(e.value().to_file_bytes());
+        });
+        vec.remove(vec.len() - 1);
+        vec
+    }
+
+    fn from_bytes(bytes: &[u8], limit_len: usize) -> Self {
+        let split = bytes.split(|e| F_SPACE == *e);
+        let records = DashMap::new();
+        for r_bytes in split {
+            let record = DNSCacheRecord::from_bytes(r_bytes);
+            if !record.is_expired() {
+                records.insert(record.domain.clone(), record);
+            }
+        }
+        DNSCacheManager {
+            records,
+            limit_len,
+        }
+    }
 }
 
 static CACHE_MANAGER: Lazy<DNSCacheManager> = Lazy::new(|| {
-    DNSCacheManager::from(1000)
+    match File::open("cache") {
+        Ok(mut file) => {
+            let file_vec = &mut Vec::new();
+            file.read_to_end(file_vec).unwrap();
+            if file_vec.is_empty() {
+                DNSCacheManager::from(1000)
+            } else {
+                DNSCacheManager::from_bytes(file_vec.as_slice(), 1000)
+            }
+        }
+        Err(_e) => {
+            DNSCacheManager::from(1000)
+        }
+    }
 });
 
 pub fn get_answer(query: &DNSQuery) -> Result<Option<DNSAnswer>> {
@@ -99,6 +175,11 @@ pub fn store_answer(answer: DNSAnswer) -> Result<()> {
 
 pub fn get_abort_action() -> AbortFunc {
     Box::new(move || {
-        println!("缓存abort处理成功!");
+        if CACHE_MANAGER.records.is_empty() {
+            return;
+        }
+        let mut file = File::create("cache").unwrap();
+        file.write_all(CACHE_MANAGER.to_file_bytes().as_slice()).unwrap();
+        println!("缓存全部写入了文件! 文件名称是cache");
     })
 }
