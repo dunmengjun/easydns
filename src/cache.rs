@@ -8,6 +8,7 @@ use dashmap::mapref::one::{Ref};
 
 pub struct DNSCacheManager {
     records: DashMap<Vec<u8>, DNSCacheRecord>,
+    limit_len: usize,
 }
 
 pub struct DNSCacheRecord {
@@ -51,12 +52,24 @@ impl DNSCacheRecord {
 }
 
 impl DNSCacheManager {
-    pub fn new() -> Self {
+    pub fn from(limit_len: usize) -> Self {
         DNSCacheManager {
             records: Default::default(),
+            limit_len,
         }
     }
     pub fn store(&self, record: DNSCacheRecord) {
+        //如果缓存超过了限制的大小，则删除掉十分之一的快过期的记录
+        if self.records.len() >= self.limit_len {
+            let vec = &mut Vec::new();
+            self.records.iter().for_each(|e| {
+                vec.push(e)
+            });
+            vec.sort_unstable_by_key(|e| e.ttl);
+            vec[0..self.limit_len / 10].iter().for_each(|e| {
+                self.records.remove(e.key());
+            });
+        }
         self.records.insert(record.domain.clone(), record);
     }
     pub fn get(&self, domain: &Vec<u8>) -> Option<Ref<Vec<u8>, DNSCacheRecord, RandomState>> {
@@ -71,7 +84,7 @@ impl DNSCacheManager {
 }
 
 static CACHE_MANAGER: Lazy<DNSCacheManager> = Lazy::new(|| {
-    DNSCacheManager::new()
+    DNSCacheManager::from(1000)
 });
 
 pub fn get_answer(query: &DNSQuery) -> Result<Option<DNSAnswer>> {
