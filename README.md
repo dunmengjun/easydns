@@ -1,6 +1,23 @@
 # easydns
-此项目编译到 [Padavan](https://github.com/hanwckf/rt-n56u)
-算是rust依赖mipsel toolchain交叉编译到Padavan的模板
+1. 此项目的目的时做一个足够简单高效的dns透传优选和屏蔽广告服务，类似smartdns, 但不会有 smartdns那么多的功能，只会提供核心关键的功能以保持简单高效。
+2. 此项目编译到 [Padavan](https://github.com/hanwckf/rt-n56u) 算是rust依赖mipsel toolchain交叉编译到Padavan的模板
+3. 百分之百用Rust语言开发，同时尽可能引用少的外部包以保证最终程序的体积。
+### 功能完成度
+- [x] A(ipv4)记录的透传
+- [ ] AAAA(ipv6)记录的透传
+- [x] 缓存(根据ttl时间)
+- [x] 多线程(自动伸缩)
+- [x] 缓存持久化
+- [ ] 域名过滤(过滤广告)
+- [ ] 域名预加载
+- [ ] dns优选
+  - [ ] 上游dns服务器优选
+  - [ ] 返回的IP地址优选 
+- [ ] 参数配置化(统一的配置文件)
+- [ ] 标准日志
+- [ ] github action自动编译
+- [ ] 测试(单元测试，稳定性测试，性能测试)
+- [ ] 其他平台的编译
 
 ### 必须的依赖:
 1. rust环境
