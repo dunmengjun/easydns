@@ -62,7 +62,7 @@ fn main() -> Result<()> {
     //注册程序退出信号处理action
     register_abort_action([
         scheduler.get_abort_action(),
-        cache::get_abort_action()
+        cache::get_abort_action(),
     ]);
     loop {
         let mut buffer = PacketBuffer::new();

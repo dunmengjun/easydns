@@ -9,10 +9,10 @@ pub struct UdpSocketPool {
 impl UdpSocketPool {
     pub fn new() -> Self {
         let mut sockets = Vec::new();
-        sockets.push(Arc::new(UdpSocket::bind(("0.0.0.0", 11345)).unwrap()));
-        sockets.push(Arc::new(UdpSocket::bind(("0.0.0.0", 11346)).unwrap()));
-        sockets.push(Arc::new(UdpSocket::bind(("0.0.0.0", 11347)).unwrap()));
-        sockets.push(Arc::new(UdpSocket::bind(("0.0.0.0", 11348)).unwrap()));
+        sockets.push(Arc::new(UdpSocket::bind(("0.0.0.0", 0)).unwrap()));
+        sockets.push(Arc::new(UdpSocket::bind(("0.0.0.0", 0)).unwrap()));
+        sockets.push(Arc::new(UdpSocket::bind(("0.0.0.0", 0)).unwrap()));
+        sockets.push(Arc::new(UdpSocket::bind(("0.0.0.0", 0)).unwrap()));
         UdpSocketPool {
             sockets,
             index: 0,
