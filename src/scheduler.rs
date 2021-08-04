@@ -117,19 +117,17 @@ pub struct TaskScheduler<T> {
 impl<T: 'static + Task + Send> TaskScheduler<T> {
     pub fn from(t_num: usize) -> Self {
         let (sender, receiver) = bounded(1000);
-        let scheduler = TaskScheduler {
+        TaskScheduler {
             t_num,
             sender,
             receiver,
             c_num: Arc::new(AtomicUsize::new(0)),
             thread_vec: Arc::new(ThreadVec::new()),
-        };
-        scheduler.start();
-        scheduler
+        }
     }
 
     fn is_thread_full(&self) -> bool {
-        self.is_started() && self.c_num.load(Ordering::SeqCst) >= self.t_num
+        self.get_current_thread_num() >= self.t_num
     }
 
     fn is_need_increase_thread(&self) -> bool {
@@ -137,6 +135,9 @@ impl<T: 'static + Task + Send> TaskScheduler<T> {
     }
 
     pub fn publish(&mut self, task: TaskMsg<T>) -> Result<()> {
+        if self.get_current_thread_num() == 0 {
+            self.create_main_thread();
+        }
         if self.is_need_increase_thread() {
             self.create_helper_thread();
         }
@@ -189,15 +190,8 @@ impl<T: 'static + Task + Send> TaskScheduler<T> {
         self.thread_vec.push(container);
     }
 
-    fn is_started(&self) -> bool {
-        self.c_num.load(Ordering::Relaxed) > 0
-    }
-
-    fn start(&self) {
-        if self.is_started() {
-            return;
-        }
-        self.create_main_thread();
+    fn get_current_thread_num(&self) -> usize {
+        self.c_num.load(Ordering::Relaxed)
     }
 
     pub fn get_abort_action(&self) -> AbortFunc {

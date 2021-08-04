@@ -1,7 +1,6 @@
 use std::fmt::{Debug};
 use crate::buffer::PacketBuffer;
 use crate::cache::DNSCacheRecord;
-use crate::timer::get_timestamp;
 
 const C_FACTOR: u8 = 192u8;
 const DC_FACTOR: u16 = 16383u16;
@@ -206,19 +205,11 @@ impl Into<DNSCacheRecord> for DNSAnswer {
                 let record = self.answers.iter()
                     .find(|a| a.name.eq(&r.data))
                     .expect("错误的dns应答");
-                DNSCacheRecord {
-                    domain: domain.clone(),
-                    address: record.data.clone(),
-                    ttl: record.ttl.clone() as u128,
-                    last_used_time: get_timestamp(),
-                }
+                DNSCacheRecord::from(
+                    domain.clone(), record.data.clone(), record.ttl.clone())
             } else {
-                DNSCacheRecord {
-                    domain: domain.clone(),
-                    address: r.data.clone(),
-                    ttl: r.ttl.clone() as u128,
-                    last_used_time: get_timestamp(),
-                }
+                DNSCacheRecord::from(
+                    domain.clone(), r.data.clone(), r.ttl.clone())
             }
         } else {
             panic!("错误的dns应答")
@@ -239,7 +230,7 @@ impl DNSAnswer {
             name: record.get_domain().clone(),
             _type: 1,
             class: 1,
-            ttl: record.get_ttl().clone() as u32,
+            ttl: record.get_ttl_secs().clone() as u32,
             data_len: 4,
             data: record.get_address().clone(),
         });
