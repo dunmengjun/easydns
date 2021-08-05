@@ -42,8 +42,11 @@ struct Header {
 
 impl Header {
     fn to_u8_vec(&self) -> Vec<u8> {
+        self.to_u8_with_id(self.id)
+    }
+    fn to_u8_with_id(&self, id: u16) -> Vec<u8> {
         let mut result = Vec::with_capacity(12);
-        result.extend(&self.id.to_be_bytes());
+        result.extend(&id.to_be_bytes());
         result.extend(&self.flags.to_be_bytes());
         result.extend(&self.question_count.to_be_bytes());
         result.extend(&self.answer_count.to_be_bytes());
@@ -111,9 +114,10 @@ impl DNSQuery {
             questions,
         }
     }
-    pub fn to_u8_vec(&self) -> Vec<u8> {
+
+    pub fn to_u8_with_id(&self, id: u16) -> Vec<u8> {
         let mut bytes = Vec::<u8>::new();
-        bytes.extend(self.header.to_u8_vec());
+        bytes.extend(self.header.to_u8_with_id(id));
         self.questions.iter().for_each(|q| {
             bytes.extend(q.to_u8_vec())
         });
@@ -261,11 +265,11 @@ impl DNSAnswer {
         vec
     }
 
-    pub fn get_domain(&self) -> &Vec<u8> {
-        &self.questions[0].name
+    pub fn get_id(&self) -> &u16 {
+        &self.header.id
     }
 
-    pub fn get_id(&self) -> u16 {
-        self.header.id
+    pub fn set_id(&mut self, id: u16) {
+        self.header.id = id;
     }
 }
