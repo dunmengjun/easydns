@@ -15,6 +15,8 @@ use dashmap::DashMap;
 use tokio::runtime::Handle;
 use tokio::task::block_in_place;
 use tokio::sync::oneshot::Sender;
+use futures_util::FutureExt;
+use futures_util::future::select_all;
 
 static UPSTREAM_SOCKET: Lazy<UdpSocket> = Lazy::new(|| {
     block_in_place(move || {
@@ -24,7 +26,7 @@ static UPSTREAM_SOCKET: Lazy<UdpSocket> = Lazy::new(|| {
     })
 });
 
-static ACCEPT_SOCKET: Lazy<UdpSocket> = Lazy::new(|| {
+static SERVER_SOCKET: Lazy<UdpSocket> = Lazy::new(|| {
     block_in_place(move || {
         Handle::current().block_on(async move {
             UdpSocket::bind("0.0.0.0:2053").await.unwrap()
@@ -32,8 +34,16 @@ static ACCEPT_SOCKET: Lazy<UdpSocket> = Lazy::new(|| {
     })
 });
 
-static ACCEPT_MAP: Lazy<DashMap<u16, Sender<DNSAnswer>>> = Lazy::new(|| {
+static ANSWER_REG_TABLE: Lazy<DashMap<u16, Sender<DNSAnswer>>> = Lazy::new(|| {
     DashMap::new()
+});
+
+static UPSTREAM_DNS_SERVERS: Lazy<Vec<&str>> = Lazy::new(|| {
+    let mut vec = Vec::with_capacity(3);
+    vec.push("114.114.114.114:53");
+    vec.push("8.8.8.8:53");
+    vec.push("1.1.1.1:53");
+    vec
 });
 
 //dig @127.0.0.1 -p 2053 www.baidu.com
@@ -48,11 +58,11 @@ async fn main() -> Result<()> {
         loop {
             match recv_answer().await {
                 Ok((answer, _)) => {
-                    match ACCEPT_MAP.remove(answer.get_id()) {
+                    match ANSWER_REG_TABLE.remove(answer.get_id()) {
                         None => {}
                         Some((_, sender)) => {
                             if let Err(e) = sender.send(answer) {
-                                ACCEPT_MAP.remove(e.get_id());
+                                ANSWER_REG_TABLE.remove(e.get_id());
                             }
                         }
                     }
@@ -79,7 +89,7 @@ async fn main() -> Result<()> {
 
 async fn recv_query() -> Result<(DNSQuery, SocketAddr)> {
     let mut buffer = PacketBuffer::new();
-    let (_, src) = ACCEPT_SOCKET.recv_from(buffer.as_mut_slice()).await?;
+    let (_, src) = SERVER_SOCKET.recv_from(buffer.as_mut_slice()).await?;
     Ok((DNSQuery::from(buffer), src))
 }
 
@@ -91,16 +101,19 @@ async fn recv_answer() -> Result<(DNSAnswer, SocketAddr)> {
 
 async fn handle_task(src: SocketAddr, query: DNSQuery) -> Result<()> {
     if let Some(answer) = get_answer(&query) {
-        ACCEPT_SOCKET.send_to(answer.to_u8_vec().as_slice(), src).await?;
+        SERVER_SOCKET.send_to(answer.to_u8_vec().as_slice(), src).await?;
     } else {
-        let r: (u128, DNSAnswer) = tokio::select! {
-            r1 = send_and_recv("8.8.8.8:53", &query) => { r1? },
-            r2 = send_and_recv("114.114.114.114:53", &query) => { r2? },
-        };
-        println!("dns answer time:{}", r.0);
-        println!("dns answer: {:?}", r.1);
-        ACCEPT_SOCKET.send_to(r.1.to_u8_vec().as_slice(), src).await?;
-        store_answer(r.1);
+        //对上游dns服务器的优选
+        let mut future_vec =
+            Vec::with_capacity(UPSTREAM_DNS_SERVERS.len());
+        for address in UPSTREAM_DNS_SERVERS.iter() {
+            future_vec.push(send_and_recv(address, &query).boxed());
+        }
+        let (pass_time, answer) = select_all(future_vec).await.0?;
+        println!("dns answer time:{}", pass_time);
+        println!("dns answer: {:?}", answer);
+        SERVER_SOCKET.send_to(answer.to_u8_vec().as_slice(), src).await?;
+        store_answer(answer);
     }
     Ok(())
 }
@@ -110,10 +123,10 @@ async fn send_and_recv(address: &str, query: &DNSQuery) -> Result<(u128, DNSAnsw
 
     let (sender, receiver) = tokio::sync::oneshot::channel();
     let next_id = next_id();
-    ACCEPT_MAP.insert(next_id, sender);
+    ANSWER_REG_TABLE.insert(next_id, sender);
     UPSTREAM_SOCKET.send_to(query.to_u8_with_id(next_id).as_slice(), address).await?;
     let mut answer = receiver.await?;
-    ACCEPT_MAP.remove(answer.get_id());
+    ANSWER_REG_TABLE.remove(answer.get_id());
     answer.set_id(query.get_id().clone());
 
     let pass_time = start.elapsed().as_micros();
