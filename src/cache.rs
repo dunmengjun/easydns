@@ -1,11 +1,13 @@
 use crate::protocol::{DNSAnswer, DNSQuery};
-use crate::system::{AbortFunc, Result, get_timestamp};
+use crate::system::{Result, get_timestamp};
 use once_cell::sync::Lazy;
 use dashmap::DashMap;
 use std::collections::hash_map::RandomState;
 use dashmap::mapref::one::{Ref};
-use std::fs::File;
-use std::io::{Write, Read};
+use tokio::fs::File;
+use tokio::io::{AsyncWriteExt, AsyncReadExt};
+use tokio::task::block_in_place;
+use tokio::runtime::Handle;
 
 const F_DELIMITER: u8 = '|' as u8;
 const F_SPACE: u8 = ' ' as u8;
@@ -146,20 +148,24 @@ impl DNSCacheManager {
 }
 
 static CACHE_MANAGER: Lazy<DNSCacheManager> = Lazy::new(|| {
-    match File::open("cache") {
-        Ok(mut file) => {
-            let file_vec = &mut Vec::new();
-            file.read_to_end(file_vec).unwrap();
-            if file_vec.is_empty() {
-                DNSCacheManager::from(1000)
-            } else {
-                DNSCacheManager::from_bytes(file_vec.as_slice(), 1000)
+    block_in_place(move || {
+        Handle::current().block_on(async move {
+            match File::open("cache").await {
+                Ok(mut file) => {
+                    let file_vec = &mut Vec::new();
+                    file.read_to_end(file_vec).await.unwrap();
+                    if file_vec.is_empty() {
+                        DNSCacheManager::from(1000)
+                    } else {
+                        DNSCacheManager::from_bytes(file_vec.as_slice(), 1000)
+                    }
+                }
+                Err(_e) => {
+                    DNSCacheManager::from(1000)
+                }
             }
-        }
-        Err(_e) => {
-            DNSCacheManager::from(1000)
-        }
-    }
+        })
+    })
 });
 
 pub fn get_answer(query: &DNSQuery) -> Option<DNSAnswer> {
@@ -172,13 +178,13 @@ pub fn store_answer(answer: DNSAnswer) {
     CACHE_MANAGER.store(answer.into())
 }
 
-pub fn get_abort_action() -> AbortFunc {
-    Box::new(move || {
-        if CACHE_MANAGER.records.is_empty() {
-            return;
-        }
-        let mut file = File::create("cache").unwrap();
-        file.write_all(CACHE_MANAGER.to_file_bytes().as_slice()).unwrap();
-        println!("缓存全部写入了文件! 文件名称是cache");
-    })
+pub async fn run_abort_action() -> Result<()> {
+    if CACHE_MANAGER.records.is_empty() {
+        println!("没有缓存需要写入文件");
+        return Ok(());
+    }
+    let mut file = File::create("cache").await?;
+    file.write_all(CACHE_MANAGER.to_file_bytes().as_slice()).await?;
+    println!("缓存全部写入了文件! 文件名称是cache");
+    Ok(())
 }

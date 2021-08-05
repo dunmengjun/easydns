@@ -33,6 +33,10 @@ impl PacketBuffer {
         result
     }
 
+    pub fn move_to(&mut self, step: usize) {
+        self.current += step;
+    }
+
     pub fn peek(&mut self) -> u8 {
         self.buf[self.current]
     }

@@ -52,14 +52,16 @@ impl Header {
         result
     }
     fn from(buffer: &mut PacketBuffer) -> Self {
-        Header {
+        let header = Header {
             id: u16::from_be_bytes([buffer.take(), buffer.take()]),
             flags: u16::from_be_bytes([buffer.take(), buffer.take()]),
             question_count: u16::from_be_bytes([buffer.take(), buffer.take()]),
             answer_count: u16::from_be_bytes([buffer.take(), buffer.take()]),
-            authority_count: u16::from_be_bytes([buffer.take(), buffer.take()]),
-            additional_count: u16::from_be_bytes([buffer.take(), buffer.take()]),
-        }
+            authority_count: 0,
+            additional_count: 0,
+        };
+        buffer.move_to(4);
+        header
     }
 }
 
@@ -257,5 +259,13 @@ impl DNSAnswer {
             vec.extend(a.to_v8_vec())
         });
         vec
+    }
+
+    pub fn get_domain(&self) -> &Vec<u8> {
+        &self.questions[0].name
+    }
+
+    pub fn get_id(&self) -> u16 {
+        self.header.id
     }
 }
