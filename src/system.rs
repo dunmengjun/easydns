@@ -2,6 +2,7 @@ use std::process;
 use std::sync::{Arc};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::error::Error;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 pub type Result<T> = core::result::Result<T, Box<dyn Error>>;
 pub type AbortFunc = Box<dyn Fn() + Sync + Send + 'static>;
@@ -10,6 +11,12 @@ pub const SIGINT: i32 = 2;
 pub const SIGTERM: i32 = 15;
 
 static ABORT_COME: AtomicBool = AtomicBool::new(false);
+
+pub fn get_timestamp() -> u128 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("Time went backwards").as_millis()
+}
 
 pub fn register_abort_action<const N: usize>(actions: [AbortFunc; N]) {
     let actions1 = Arc::new(actions);

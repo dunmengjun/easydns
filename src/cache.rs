@@ -1,6 +1,5 @@
 use crate::protocol::{DNSAnswer, DNSQuery};
-use crate::timer::get_timestamp;
-use crate::system::{AbortFunc, Result};
+use crate::system::{AbortFunc, Result, get_timestamp};
 use once_cell::sync::Lazy;
 use dashmap::DashMap;
 use std::collections::hash_map::RandomState;
@@ -163,14 +162,14 @@ static CACHE_MANAGER: Lazy<DNSCacheManager> = Lazy::new(|| {
     }
 });
 
-pub fn get_answer(query: &DNSQuery) -> Result<Option<DNSAnswer>> {
-    Ok(CACHE_MANAGER.get(query.get_domain())
+pub fn get_answer(query: &DNSQuery) -> Option<DNSAnswer> {
+    CACHE_MANAGER.get(query.get_domain())
         .map(|r|
-            DNSAnswer::from_cache(query.get_id().clone(), r.value())))
+            DNSAnswer::from_cache(query.get_id().clone(), r.value()))
 }
 
-pub fn store_answer(answer: DNSAnswer) -> Result<()> {
-    Ok(CACHE_MANAGER.store(answer.into()))
+pub fn store_answer(answer: DNSAnswer) {
+    CACHE_MANAGER.store(answer.into())
 }
 
 pub fn get_abort_action() -> AbortFunc {
