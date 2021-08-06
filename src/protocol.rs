@@ -120,14 +120,14 @@ impl DNSQuery {
     pub fn from_domain(domain: &str) -> Self {
         let header = Header {
             id: next_id(),
-            flags: 128,
+            flags: 0x0100,
             question_count: 1,
             answer_count: 0,
             authority_count: 0,
             additional_count: 0,
         };
         let question = Question {
-            name: String::from(domain).into_bytes(),
+            name: wrap_dns_domain(domain),
             _type: 1,
             class: 1,
         };
@@ -153,6 +153,21 @@ impl DNSQuery {
     pub fn get_domain(&self) -> &Vec<u8> {
         &self.questions[0].name
     }
+
+    pub fn is_not_supported() -> bool {
+        false
+    }
+}
+
+fn wrap_dns_domain(domain: &str) -> Vec<u8> {
+    let mut vec = Vec::new();
+    let split = domain.split(".");
+    for str in split {
+        vec.push(str.len() as u8);
+        vec.extend(str.bytes());
+    }
+    vec.push(0u8);
+    vec
 }
 
 #[derive(Debug)]

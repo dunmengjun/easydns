@@ -38,6 +38,7 @@ async fn main() -> Result<()> {
     tokio::spawn(async move {
         let mut interval = interval(Duration::from_secs(43200));
         loop {
+            interval.tick().await;
             let test_query = DNSQuery::from_domain("www.baidu.com");
             match preferred_dns_server(test_query).await {
                 Ok(server) => {
@@ -47,7 +48,6 @@ async fn main() -> Result<()> {
                     eprintln!("interval task upstream servers choose has error: {:?}", e)
                 }
             }
-            interval.tick().await;
         }
     });
     //从客户端接受请求的主循环
@@ -108,7 +108,9 @@ async fn preferred_dns_server(query: DNSQuery) -> Result<&'static str> {
     for address in UPSTREAM_DNS_SERVERS.iter() {
         future_vec.push(send_and_recv(address, &query).boxed());
     }
-    Ok(UPSTREAM_DNS_SERVERS[select_all(future_vec).await.1])
+    let (result, index, _) = select_all(future_vec).await;
+    let _answer = result?;
+    Ok(UPSTREAM_DNS_SERVERS[index])
 }
 
 async fn preferred_with_ping(answer: &mut DNSAnswer) -> Result<()> {
