@@ -8,6 +8,9 @@ use tokio::sync::oneshot::Sender;
 use crate::protocol::DNSAnswer;
 use std::sync::Mutex;
 
+pub const QUERY_ONLY_RECURSIVELY: u16 = 0x0100;
+pub const QUERY_RECURSIVELY_AD: u16 = 0x0120;
+
 pub static UPSTREAM_SOCKET: Lazy<UdpSocket> = Lazy::new(|| {
     block_in_place(move || {
         Handle::current().block_on(async move {

@@ -6,7 +6,6 @@ mod config;
 
 use crate::buffer::PacketBuffer;
 use crate::protocol::{DNSQuery, DNSAnswer};
-use crate::cache::{get_answer, store_answer};
 use crate::system::{Result, next_id};
 use std::net::SocketAddr;
 use futures_util::{FutureExt};
@@ -88,18 +87,30 @@ async fn recv_and_handle_answer() -> Result<()> {
 async fn handle_task(src: SocketAddr, buffer: PacketBuffer) -> Result<()> {
     let query = DNSQuery::from(buffer);
     println!("dns query: {:?}", query);
-    if let Some(answer) = get_answer(&query) {
+    if !query.is_supported() {
+        println!("The dns query is not supported , will not mit the cache and pre choose!");
+        let answer = send_and_recv(fast_dns_server(), &query).await?;
+        SERVER_SOCKET.send_to(answer.to_u8_vec().as_slice(), src).await?;
+        println!("dns answer: {:?}", answer);
+        return Ok(());
+    }
+    if let Some(answer) = cache::get_answer(&query) {
         //在缓存里则直接send出去
         SERVER_SOCKET.send_to(answer.to_u8_vec().as_slice(), src).await?;
     } else {
-        let mut answer = send_and_recv(fast_dns_server(), &query).await?;
-        println!("dns answer: {:?}", answer);
-        //优选ip, 默认是ping协议
-        preferred_with_ping(&mut answer).await?;
+        let answer = get_answer_from_upstream(&query).await?;
         SERVER_SOCKET.send_to(answer.to_u8_vec().as_slice(), src).await?;
-        store_answer(answer);
+        cache::store_answer(answer);
     }
     Ok(())
+}
+
+async fn get_answer_from_upstream(query: &DNSQuery) -> Result<DNSAnswer> {
+    let mut answer = send_and_recv(fast_dns_server(), &query).await?;
+    println!("dns answer: {:?}", answer);
+    //优选ip, 默认是ping协议
+    preferred_with_ping(&mut answer).await?;
+    Ok(answer)
 }
 
 async fn preferred_dns_server(query: DNSQuery) -> Result<&'static str> {

@@ -3,6 +3,7 @@ use crate::buffer::PacketBuffer;
 use crate::cache::DNSCacheRecord;
 use std::net::{IpAddr, Ipv4Addr};
 use crate::system::next_id;
+use crate::config::{QUERY_ONLY_RECURSIVELY, QUERY_RECURSIVELY_AD};
 
 const C_FACTOR: u8 = 192u8;
 const DC_FACTOR: u16 = 16383u16;
@@ -41,7 +42,6 @@ struct Header {
     additional_count: u16,
 }
 
-
 impl Header {
     fn to_u8_vec(&self) -> Vec<u8> {
         self.to_u8_with_id(self.id)
@@ -67,6 +67,19 @@ impl Header {
         };
         buffer.move_to(4);
         header
+    }
+
+    fn is_legal(&self) -> bool {
+        !(self.answer_count > 0)
+    }
+
+    pub fn is_supported(&self) -> bool {
+        let flag_supported =
+            self.flags == QUERY_ONLY_RECURSIVELY
+                || self.flags == QUERY_RECURSIVELY_AD;
+        self.is_legal()
+            && flag_supported
+            && self.question_count == 1
     }
 }
 
@@ -95,6 +108,16 @@ impl Question {
             _type,
             class,
         }
+    }
+
+    fn is_legal(&self) -> bool {
+        true
+    }
+
+    pub fn is_supported(&self) -> bool {
+        self.is_legal()
+            && self._type == 1
+            && self.class == 1
     }
 }
 
@@ -154,8 +177,10 @@ impl DNSQuery {
         &self.questions[0].name
     }
 
-    pub fn is_not_supported() -> bool {
-        false
+    pub fn is_supported(&self) -> bool {
+        self.header.is_supported()
+            && self.questions.len() == 1
+            && self.questions[0].is_supported()
     }
 }
 
