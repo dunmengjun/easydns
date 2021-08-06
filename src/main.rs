@@ -74,10 +74,9 @@ async fn main() -> Result<()> {
         }
     });
     loop {
-        let (query, src) = recv_query().await?;
-        println!("dns query: {:?}", query);
+        let (buffer, src) = recv_query().await?;
         tokio::spawn(async move {
-            match handle_task(src, query).await {
+            match handle_task(src, buffer).await {
                 Ok(_) => {}
                 Err(e) => {
                     eprintln!("error occur here main{:?}", e)
@@ -87,10 +86,10 @@ async fn main() -> Result<()> {
     }
 }
 
-async fn recv_query() -> Result<(DNSQuery, SocketAddr)> {
+async fn recv_query() -> Result<(PacketBuffer, SocketAddr)> {
     let mut buffer = PacketBuffer::new();
     let (_, src) = SERVER_SOCKET.recv_from(buffer.as_mut_slice()).await?;
-    Ok((DNSQuery::from(buffer), src))
+    Ok((buffer, src))
 }
 
 async fn recv_answer() -> Result<(DNSAnswer, SocketAddr)> {
@@ -99,7 +98,9 @@ async fn recv_answer() -> Result<(DNSAnswer, SocketAddr)> {
     Ok((DNSAnswer::from(buffer), src))
 }
 
-async fn handle_task(src: SocketAddr, query: DNSQuery) -> Result<()> {
+async fn handle_task(src: SocketAddr, buffer: PacketBuffer) -> Result<()> {
+    let query = DNSQuery::from(buffer);
+    println!("dns query: {:?}", query);
     if let Some(answer) = get_answer(&query) {
         SERVER_SOCKET.send_to(answer.to_u8_vec().as_slice(), src).await?;
     } else {
