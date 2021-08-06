@@ -13,5 +13,13 @@ pub fn get_timestamp() -> u128 {
 static ID: AtomicU16 = AtomicU16::new(0);
 
 pub fn next_id() -> u16 {
-    ID.fetch_add(1, Ordering::SeqCst)
+    match ID.fetch_update(Ordering::SeqCst, Ordering::Relaxed, |x| {
+        if x > u16::MAX - 10000 {
+            Some(0);
+        }
+        Some(x + 1)
+    }) {
+        Ok(id) => id,
+        Err(e) => e
+    }
 }

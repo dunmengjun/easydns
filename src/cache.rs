@@ -8,6 +8,7 @@ use tokio::fs::File;
 use tokio::io::{AsyncWriteExt, AsyncReadExt};
 use tokio::task::block_in_place;
 use tokio::runtime::Handle;
+use crate::config::cache_on;
 
 const F_DELIMITER: u8 = '|' as u8;
 const F_SPACE: u8 = ' ' as u8;
@@ -150,6 +151,9 @@ impl DNSCacheManager {
 static CACHE_MANAGER: Lazy<DNSCacheManager> = Lazy::new(|| {
     block_in_place(move || {
         Handle::current().block_on(async move {
+            if !cache_on() {
+                return DNSCacheManager::from(1000);
+            }
             match File::open("cache").await {
                 Ok(mut file) => {
                     let file_vec = &mut Vec::new();
@@ -169,16 +173,26 @@ static CACHE_MANAGER: Lazy<DNSCacheManager> = Lazy::new(|| {
 });
 
 pub fn get_answer(query: &DNSQuery) -> Option<DNSAnswer> {
+    if !cache_on() {
+        return None;
+    }
     CACHE_MANAGER.get(query.get_domain())
         .map(|r|
             DNSAnswer::from_cache(query.get_id().clone(), r.value()))
 }
 
 pub fn store_answer(answer: DNSAnswer) {
+    if !cache_on() {
+        return;
+    }
     CACHE_MANAGER.store(answer.into())
 }
 
 pub async fn run_abort_action() -> Result<()> {
+    if !cache_on() {
+        println!("缓存已禁用");
+        return Ok(());
+    }
     if CACHE_MANAGER.records.is_empty() {
         println!("没有缓存需要写入文件");
         return Ok(());

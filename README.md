@@ -13,10 +13,10 @@
 - [x] 缓存持久化
 - [ ] 域名过滤(过滤广告)
 - [ ] 域名预加载
-- [ ] dns优选
+- [x] dns优选
   - [x] 上游dns服务器优选
-  - [ ] 返回的IP地址优选
-    - [ ] ping协议
+  - [x] 返回的IP地址优选
+    - [x] ping协议 (需要设置root权限或者给程序设置cap_net_raw)
     - [ ] tcp协议
 - [ ] 参数配置化(统一的配置文件)
 - [ ] 标准日志
@@ -94,4 +94,8 @@ Remote debugging using localhost:1234
 ```
 在clion这种IDE上可以以Remote GDB Server来配置，核心就是上面两个命令
 
-~~ps: 程序中不能禁用panic的栈展开，不然一些多线程保障机制无法完成~~ 
+### 常用命令
+设置cap_net_raw
+```shell
+sudo setcap cap_net_raw=eip {程序名称}
+```

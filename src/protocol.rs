@@ -1,6 +1,8 @@
 use std::fmt::{Debug};
 use crate::buffer::PacketBuffer;
 use crate::cache::DNSCacheRecord;
+use std::net::{IpAddr, Ipv4Addr};
+use crate::system::next_id;
 
 const C_FACTOR: u8 = 192u8;
 const DC_FACTOR: u16 = 16383u16;
@@ -115,6 +117,26 @@ impl DNSQuery {
         }
     }
 
+    pub fn from_domain(domain: &str) -> Self {
+        let header = Header {
+            id: next_id(),
+            flags: 128,
+            question_count: 1,
+            answer_count: 0,
+            authority_count: 0,
+            additional_count: 0,
+        };
+        let question = Question {
+            name: String::from(domain).into_bytes(),
+            _type: 1,
+            class: 1,
+        };
+        DNSQuery {
+            header,
+            questions: vec![question],
+        }
+    }
+
     pub fn to_u8_with_id(&self, id: u16) -> Vec<u8> {
         let mut bytes = Vec::<u8>::new();
         bytes.extend(self.header.to_u8_with_id(id));
@@ -162,6 +184,10 @@ impl ResourceRecord {
             data_len,
             data,
         }
+    }
+
+    fn is_a_record(&self) -> bool {
+        self._type == 1
     }
 
     fn to_v8_vec(&self) -> Vec<u8> {
@@ -271,5 +297,33 @@ impl DNSAnswer {
 
     pub fn set_id(&mut self, id: u16) {
         self.header.id = id;
+    }
+
+    pub fn get_ip_vec(&self) -> Vec<IpAddr> {
+        self.answers.iter().filter(|r| {
+            r.is_a_record()
+        }).map(|r| {
+            let vec = &r.data;
+            IpAddr::V4(Ipv4Addr::new(vec[0], vec[1], vec[2], vec[3]))
+        }).collect()
+    }
+
+    pub fn retain_ip(&mut self, ip: IpAddr) {
+        let ip_vec = match ip {
+            IpAddr::V4(ipv4) => {
+                Vec::from(ipv4.octets())
+            }
+            IpAddr::V6(ipv6) => {
+                Vec::from(ipv6.octets())
+            }
+        };
+        self.answers.retain(|r| {
+            r.data.eq(&ip_vec)
+        });
+        let domain_name = &self.questions[0].name;
+        self.answers.iter_mut().for_each(|mut r| {
+            r.name = domain_name.clone();
+        });
+        self.header.answer_count = 1;
     }
 }
