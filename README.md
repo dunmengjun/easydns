@@ -1,4 +1,4 @@
-# easydns
+# Easydns
 
 1. 此项目的目的时做一个足够简单高效的dns透传优选和屏蔽广告服务，类似smartdns, 但不会有 smartdns那么多的功能，只会提供核心关键的功能以保持简单高效。
 2. 此项目编译到 [Padavan](https://github.com/hanwckf/rt-n56u) 算是rust依赖mipsel toolchain交叉编译到Padavan的模板
