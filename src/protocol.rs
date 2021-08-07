@@ -177,6 +177,23 @@ impl DNSQuery {
         &self.questions[0].name
     }
 
+    pub fn get_readable_domain(&self) -> String {
+        let mut c = self.questions[0].name[0] as usize;
+        let mut index = 1usize;
+        let mut vec = Vec::new();
+        while c != 0 {
+            for i in index..(index + c) {
+                vec.push(self.questions[0].name[i]);
+            }
+            vec.push('.' as u8);
+            index += c;
+            c = self.questions[0].name[index] as usize;
+            index += 1
+        }
+        vec.remove(vec.len() - 1);
+        String::from_utf8(vec).unwrap()
+    }
+
     pub fn is_supported(&self) -> bool {
         self.header.is_supported()
             && self.questions.len() == 1
@@ -247,6 +264,7 @@ pub struct DNSAnswer {
     header: Header,
     questions: Vec<Question>,
     answers: Vec<ResourceRecord>,
+    authorities: Vec<ResourceRecord>,
 }
 
 impl From<PacketBuffer> for DNSAnswer {
@@ -264,27 +282,7 @@ impl From<PacketBuffer> for DNSAnswer {
             header,
             questions,
             answers: resources,
-        }
-    }
-}
-
-impl Into<DNSCacheRecord> for DNSAnswer {
-    fn into(self) -> DNSCacheRecord {
-        let domain = &self.questions[0].name;
-        if let Some(r) = self.answers.iter()
-            .find(|a| a.name.eq(domain)) {
-            if r._type == 5 {
-                let record = self.answers.iter()
-                    .find(|a| a.name.eq(&r.data))
-                    .expect("错误的dns应答");
-                DNSCacheRecord::from(
-                    domain.clone(), record.data.clone(), record.ttl.clone())
-            } else {
-                DNSCacheRecord::from(
-                    domain.clone(), r.data.clone(), r.ttl.clone())
-            }
-        } else {
-            panic!("错误的dns应答")
+            authorities: vec![],
         }
     }
 }
@@ -317,6 +315,42 @@ impl DNSAnswer {
             },
             questions,
             answers,
+            authorities: vec![],
+        }
+    }
+
+    pub fn from_query_with_soa(query: &DNSQuery) -> Self {
+        let header = Header {
+            id: query.get_id().clone(),
+            flags: 0x8180,
+            question_count: 1,
+            answer_count: 0,
+            authority_count: 1,
+            additional_count: 0,
+        };
+        let question = Question {
+            name: query.get_domain().clone(),
+            _type: 1,
+            class: 1,
+        };
+        let record = ResourceRecord {
+            name: query.get_domain().clone(),
+            _type: 6,
+            class: 1,
+            ttl: 0,
+            data_len: 64,
+            data: vec![
+                0x01, 0x61, 0x0c, 0x67, 0x74, 0x6c, 0x64, 0x2d, 0x73, 0x65, 0x72, 0x76, 0x65, 0x72, 0x73, 0x03, 0x6e, 0x65, 0x74, 0x00,
+                0x05, 0x6e, 0x73, 0x74, 0x6c, 0x64, 0x0c, 0x76, 0x65, 0x72, 0x69, 0x73, 0x69, 0x67, 0x6e, 0x2d, 0x67, 0x72, 0x73, 0x03,
+                0x63, 0x6f, 0x6d, 0x00,
+                0x00, 0x00, 0x07, 0x08, 0x00, 0x00, 0x07, 0x08, 0x00, 0x00, 0x03, 0x84, 0x00, 0x09, 0x3a, 0x80, 0x00, 0x01, 0x51, 0x80,
+            ],
+        };
+        DNSAnswer {
+            header,
+            questions: vec![question],
+            answers: vec![],
+            authorities: vec![record],
         }
     }
     pub fn to_u8_vec(&self) -> Vec<u8> {
@@ -328,7 +362,29 @@ impl DNSAnswer {
         self.answers.iter().for_each(|a| {
             vec.extend(a.to_v8_vec())
         });
+        self.authorities.iter().for_each(|a| {
+            vec.extend(a.to_v8_vec())
+        });
         vec
+    }
+
+    pub fn to_cache(&self) -> DNSCacheRecord {
+        let domain = &self.questions[0].name;
+        if let Some(r) = self.answers.iter()
+            .find(|a| a.name.eq(domain)) {
+            if r._type == 5 {
+                let record = self.answers.iter()
+                    .find(|a| a.name.eq(&r.data))
+                    .expect("错误的dns应答");
+                DNSCacheRecord::from(
+                    domain.clone(), record.data.clone(), record.ttl.clone())
+            } else {
+                DNSCacheRecord::from(
+                    domain.clone(), r.data.clone(), r.ttl.clone())
+            }
+        } else {
+            panic!("错误的dns应答")
+        }
     }
 
     pub fn get_id(&self) -> &u16 {

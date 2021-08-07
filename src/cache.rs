@@ -181,11 +181,11 @@ pub fn get_answer(query: &DNSQuery) -> Option<DNSAnswer> {
             DNSAnswer::from_cache(query.get_id().clone(), r.value()))
 }
 
-pub fn store_answer(answer: DNSAnswer) {
+pub fn store_answer(answer: &DNSAnswer) {
     if !cache_on() {
         return;
     }
-    CACHE_MANAGER.store(answer.into())
+    CACHE_MANAGER.store(answer.to_cache())
 }
 
 pub async fn run_abort_action() -> Result<()> {

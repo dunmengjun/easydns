@@ -3,6 +3,7 @@ mod protocol;
 mod cache;
 mod system;
 mod config;
+mod filter;
 
 use crate::buffer::PacketBuffer;
 use crate::protocol::{DNSQuery, DNSAnswer};
@@ -12,6 +13,7 @@ use futures_util::{FutureExt};
 use futures_util::future::select_all;
 use crate::config::*;
 use tokio::time::{interval, Duration};
+use async_trait::async_trait;
 
 //dig @127.0.0.1 -p 2053 www.baidu.com
 #[tokio::main]
@@ -52,6 +54,7 @@ async fn main() -> Result<()> {
     //从客户端接受请求的主循环
     loop {
         let (buffer, src) = recv_query().await?;
+        // handle_chain();
         tokio::spawn(async move {
             match handle_task(src, buffer).await {
                 Ok(_) => {}
@@ -60,6 +63,109 @@ async fn main() -> Result<()> {
                 }
             }
         });
+    }
+}
+
+async fn handle_task(src: SocketAddr, buffer: PacketBuffer) -> Result<()> {
+    let mut query_clain = Clain::new();
+    query_clain.add(DomainFilter);
+    query_clain.add(LegalChecker);
+    query_clain.add(CacheHandler);
+    query_clain.add(IpChoiceMaker);
+    query_clain.add(QuerySender);
+    let answer = query_clain.next(&DNSQuery::from(buffer)).await?;
+    SERVER_SOCKET.send_to(answer.to_u8_vec().as_slice(), src).await?;
+    Ok(())
+}
+
+
+struct Clain {
+    funcs: Vec<Box<dyn Handler + Send + Sync>>,
+}
+
+impl Clain {
+    fn new() -> Self {
+        Clain {
+            funcs: Vec::new()
+        }
+    }
+
+    fn add(&mut self, handler: impl Handler + Send + Sync + 'static) {
+        self.funcs.push(Box::new(handler));
+    }
+
+    async fn next(&mut self, query: &DNSQuery) -> Result<DNSAnswer> {
+        self.funcs.remove(0).handle(self, query).await
+    }
+}
+
+#[async_trait]
+trait Handler {
+    async fn handle(&self, clain: &mut Clain, query: &DNSQuery) -> Result<DNSAnswer>;
+}
+
+struct LegalChecker;
+
+#[async_trait]
+impl Handler for LegalChecker {
+    async fn handle(&self, clain: &mut Clain, query: &DNSQuery) -> Result<DNSAnswer> {
+        if !query.is_supported() {
+            println!("The dns query is not supported , will not mit the cache and pre choose!");
+            let answer = send_and_recv(fast_dns_server(), query).await?;
+            println!("dns answer: {:?}", answer);
+            return Ok(answer);
+        } else {
+            clain.next(query).await
+        }
+    }
+}
+
+struct CacheHandler;
+
+#[async_trait]
+impl Handler for CacheHandler {
+    async fn handle(&self, clain: &mut Clain, query: &DNSQuery) -> Result<DNSAnswer> {
+        if let Some(answer) = cache::get_answer(query) {
+            return Ok(answer);
+        } else {
+            let result = clain.next(query).await?;
+            cache::store_answer(&result);
+            Ok(result)
+        }
+    }
+}
+
+struct QuerySender;
+
+#[async_trait]
+impl Handler for QuerySender {
+    async fn handle(&self, _: &mut Clain, query: &DNSQuery) -> Result<DNSAnswer> {
+        send_and_recv(fast_dns_server(), query).await
+    }
+}
+
+struct IpChoiceMaker;
+
+#[async_trait]
+impl Handler for IpChoiceMaker {
+    async fn handle(&self, clain: &mut Clain, query: &DNSQuery) -> Result<DNSAnswer> {
+        let mut answer = clain.next(query).await?;
+        preferred_with_ping(&mut answer).await?;
+        Ok(answer)
+    }
+}
+
+struct DomainFilter;
+
+#[async_trait]
+impl Handler for DomainFilter {
+    async fn handle(&self, clain: &mut Clain, query: &DNSQuery) -> Result<DNSAnswer> {
+        let domain = query.get_readable_domain();
+        if filter::contain(domain) {
+            //返回soa
+            return Ok(DNSAnswer::from_query_with_soa(query));
+        }
+        clain.next(query).await
     }
 }
 
@@ -82,35 +188,6 @@ async fn recv_and_handle_answer() -> Result<()> {
         }
     }
     Ok(())
-}
-
-async fn handle_task(src: SocketAddr, buffer: PacketBuffer) -> Result<()> {
-    let query = DNSQuery::from(buffer);
-    println!("dns query: {:?}", query);
-    if !query.is_supported() {
-        println!("The dns query is not supported , will not mit the cache and pre choose!");
-        let answer = send_and_recv(fast_dns_server(), &query).await?;
-        SERVER_SOCKET.send_to(answer.to_u8_vec().as_slice(), src).await?;
-        println!("dns answer: {:?}", answer);
-        return Ok(());
-    }
-    if let Some(answer) = cache::get_answer(&query) {
-        //在缓存里则直接send出去
-        SERVER_SOCKET.send_to(answer.to_u8_vec().as_slice(), src).await?;
-    } else {
-        let answer = get_answer_from_upstream(&query).await?;
-        SERVER_SOCKET.send_to(answer.to_u8_vec().as_slice(), src).await?;
-        cache::store_answer(answer);
-    }
-    Ok(())
-}
-
-async fn get_answer_from_upstream(query: &DNSQuery) -> Result<DNSAnswer> {
-    let mut answer = send_and_recv(fast_dns_server(), &query).await?;
-    println!("dns answer: {:?}", answer);
-    //优选ip, 默认是ping协议
-    preferred_with_ping(&mut answer).await?;
-    Ok(answer)
 }
 
 async fn preferred_dns_server(query: DNSQuery) -> Result<&'static str> {
