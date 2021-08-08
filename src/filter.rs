@@ -6,7 +6,7 @@ use tokio::fs::File;
 use crate::system::Result;
 use tokio::io::{BufReader, AsyncBufReadExt, AsyncBufRead};
 use regex::Regex;
-use std::io::{Cursor};
+use std::process::Stdio;
 
 const GET_DOMAIN_REGEX: &str = "address /([a-zA-Z0-9][-a-zA-Z0-9]{0,62}(\\.[a-zA-Z0-9][-a-zA-Z0-9]{0,62})+)/#";
 
@@ -26,12 +26,15 @@ pub static FILTER_SET: Lazy<HashSet<String>> = Lazy::new(|| {
 });
 
 async fn read_url_to_filter(url: &str) -> Result<HashSet<String>> {
-    //禁止校验证书
-    let client = reqwest::ClientBuilder::new()
-        .danger_accept_invalid_certs(true).build()?;
-    let text = client.get(url).send().await?.text().await?;
-    let cursor = Cursor::new(text);
-    read_to_filter(cursor).await
+    let mut child = tokio::process::Command::new("curl")
+        .arg("-k")
+        .arg("-s")
+        .arg(url)
+        .stdout(Stdio::piped())
+        .spawn()?;
+    let reader = BufReader::new(child.stdout.take().unwrap());
+    child.wait().await?;
+    read_to_filter(reader).await
 }
 
 async fn read_file_to_filter(file_path: &str) -> Result<HashSet<String>> {

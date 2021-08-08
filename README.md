@@ -40,15 +40,7 @@
 ```shell
 cargo install --path .
 ```
-4. openssl dev tool
-    - Ubuntu
-    ```shell
-    sudo apt-get install libssl-dev
-    ```
-   - Padavan
-    参考这个 [Makefile文件](https://github.com/hanwckf/rt-n56u/blob/df06dffd0abb74f75ab569cc016c1d584b02cec4/trunk/libs/libssl/Makefile)
-
-
+4. curl, 系统上必须安装 curl
 ### 可选依赖:
 
 4. 在本机上测试和运行依赖于 qemu-mipsel 5.2.0, 单纯编译不需要。
