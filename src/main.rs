@@ -1,3 +1,5 @@
+#![feature(panic_info_message)]
+
 mod buffer;
 mod protocol;
 mod cache;
@@ -14,10 +16,19 @@ use futures_util::future::select_all;
 use crate::config::*;
 use tokio::time::{interval, Duration};
 use async_trait::async_trait;
+use simple_logger::SimpleLogger;
+
+#[macro_use]
+extern crate log;
 
 //dig @127.0.0.1 -p 2053 www.baidu.com
 #[tokio::main]
 async fn main() -> Result<()> {
+    SimpleLogger::new().init().unwrap();
+    //设置panic hook
+    std::panic::set_hook(Box::new(|panic_info| {
+        error!("panic message: {:?}, location in {:?}", panic_info.message(), panic_info.location());
+    }));
     //创建任务去监听ctrl_c event
     tokio::spawn(async move {
         tokio::signal::ctrl_c().await.expect("failed to listen for ctrl_c event");
@@ -30,7 +41,7 @@ async fn main() -> Result<()> {
             match recv_and_handle_answer().await {
                 Ok(()) => {}
                 Err(e) => {
-                    eprintln!("error occur here accept {:?}", e)
+                    error!("error occur here accept {:?}", e)
                 }
             }
         }
@@ -46,7 +57,7 @@ async fn main() -> Result<()> {
                     set_fast_dns_server(server);
                 }
                 Err(e) => {
-                    eprintln!("interval task upstream servers choose has error: {:?}", e)
+                    error!("interval task upstream servers choose has error: {:?}", e)
                 }
             }
         }
@@ -59,7 +70,7 @@ async fn main() -> Result<()> {
             match handle_task(src, buffer).await {
                 Ok(_) => {}
                 Err(e) => {
-                    eprintln!("error occur here main{:?}", e)
+                    error!("error occur here main{:?}", e)
                 }
             }
         });
@@ -110,9 +121,9 @@ struct LegalChecker;
 impl Handler for LegalChecker {
     async fn handle(&self, clain: &mut Clain, query: &DNSQuery) -> Result<DNSAnswer> {
         if !query.is_supported() {
-            println!("The dns query is not supported , will not mit the cache and pre choose!");
+            debug!("The dns query is not supported , will not mit the cache and pre choose!");
             let answer = send_and_recv(fast_dns_server(), query).await?;
-            println!("dns answer: {:?}", answer);
+            debug!("dns answer: {:?}", answer);
             return Ok(answer);
         } else {
             clain.next(query).await

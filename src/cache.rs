@@ -190,15 +190,15 @@ pub fn store_answer(answer: &DNSAnswer) {
 
 pub async fn run_abort_action() -> Result<()> {
     if !cache_on() {
-        println!("缓存已禁用");
+        info!("缓存已禁用");
         return Ok(());
     }
     if CACHE_MANAGER.records.is_empty() {
-        println!("没有缓存需要写入文件");
+        info!("没有缓存需要写入文件");
         return Ok(());
     }
     let mut file = File::create("cache").await?;
     file.write_all(CACHE_MANAGER.to_file_bytes().as_slice()).await?;
-    println!("缓存全部写入了文件! 文件名称是cache");
+    info!("缓存全部写入了文件! 文件名称是cache");
     Ok(())
 }

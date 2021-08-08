@@ -2,7 +2,7 @@
 
 1. 此项目的目的时做一个足够简单高效的dns透传优选和屏蔽广告服务，类似smartdns, 但不会有 smartdns那么多的功能，只会提供核心关键的功能以保持简单高效。
 2. 此项目编译到 [Padavan](https://github.com/hanwckf/rt-n56u) 算是rust依赖mipsel toolchain交叉编译到Padavan的模板
-3. 百分之百用Rust语言开发，同时尽可能引用少的外部包以保证最终程序的体积。
+3. 百分之百用Rust语言开发
 
 ### 功能完成度
 
@@ -16,8 +16,8 @@
 - [x] 缓存持久化(存本地文件，下次启动时load)
 - [x] 域名过滤(过滤广告，返回soa)
   - [x] 返回soa 
-  - [ ] 从文件中读
-  - [ ] 从网址中读
+  - [x] 从文件中读
+  - [x] 从网址中读
 - [ ] 上游服务器组管理
 - [x] dns优选
     - [x] 上游dns服务器优选
@@ -26,22 +26,28 @@
         - [ ] tcp协议
             - [ ] 80端口网页中的域名预加载到缓存
 - [ ] 参数配置化(统一的配置文件)
-- [ ] 标准日志
+- [x] 标准日志
 - [ ] github action自动编译
 - [ ] 测试(单元测试，稳定性测试，性能测试)
 - [ ] 其他平台的编译(linux, windows, macos)
 
 ### 必须的依赖:
-
 1. rust环境
 2. mipsel
    toolchain [下载地址](https://github.com/hanwckf/padavan-toolchain/releases/download/v1.1/mipsel-linux-uclibc.tar.xz)
    下完解压即可
 3. cargo exec [仓库地址](https://github.com/dunmengjun/cargo-exec) clone完成后
-
 ```shell
 cargo install --path .
 ```
+4. openssl dev tool
+    - Ubuntu
+    ```shell
+    sudo apt-get install libssl-dev
+    ```
+   - Padavan
+    参考这个 [Makefile文件](https://github.com/hanwckf/rt-n56u/blob/df06dffd0abb74f75ab569cc016c1d584b02cec4/trunk/libs/libssl/Makefile)
+
 
 ### 可选依赖:
 
