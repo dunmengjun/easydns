@@ -1,14 +1,12 @@
 use crate::protocol::{DNSAnswer, DNSQuery};
 use crate::system::{Result, get_timestamp};
-use once_cell::sync::Lazy;
 use dashmap::DashMap;
 use std::collections::hash_map::RandomState;
 use dashmap::mapref::one::{Ref};
 use tokio::fs::File;
 use tokio::io::{AsyncWriteExt, AsyncReadExt};
-use tokio::task::block_in_place;
-use tokio::runtime::Handle;
-use crate::config::cache_on;
+use crate::config::Config;
+use tokio::sync::{OnceCell};
 
 const F_DELIMITER: u8 = '|' as u8;
 const F_SPACE: u8 = ' ' as u8;
@@ -148,35 +146,66 @@ impl DNSCacheManager {
     }
 }
 
-static CACHE_MANAGER: Lazy<DNSCacheManager> = Lazy::new(|| {
-    block_in_place(move || {
-        Handle::current().block_on(async move {
-            if !cache_on() {
-                return DNSCacheManager::from(1000);
-            }
-            match File::open("cache").await {
-                Ok(mut file) => {
-                    let file_vec = &mut Vec::new();
-                    file.read_to_end(file_vec).await.unwrap();
-                    if file_vec.is_empty() {
-                        DNSCacheManager::from(1000)
-                    } else {
-                        DNSCacheManager::from_bytes(file_vec.as_slice(), 1000)
-                    }
+struct CacheContext {
+    cache_on: bool,
+    manager: DNSCacheManager,
+}
+
+impl CacheContext {
+    async fn from(config: &Config) -> Self {
+        if !config.cache_on {
+            return CacheContext {
+                cache_on: false,
+                manager: DNSCacheManager::from(config.cache_num),
+            };
+        }
+        let manager = match File::open(config.cache_file).await {
+            Ok(mut file) => {
+                let file_vec = &mut Vec::new();
+                file.read_to_end(file_vec).await.unwrap();
+                if file_vec.is_empty() {
+                    DNSCacheManager::from(config.cache_num)
+                } else {
+                    DNSCacheManager::from_bytes(file_vec.as_slice(), config.cache_num)
                 }
-                Err(_e) => {
-                    DNSCacheManager::from(1000)
-                }
             }
-        })
-    })
-});
+            Err(_e) => {
+                DNSCacheManager::from(config.cache_num)
+            }
+        };
+        CacheContext {
+            cache_on: config.cache_on,
+            manager,
+        }
+    }
+}
+
+static CACHE_CONTEXT: OnceCell<CacheContext> = OnceCell::const_new();
+
+pub async fn init_context(config: &Config) -> Result<()> {
+    let context = CacheContext::from(config).await;
+    match CACHE_CONTEXT.set(context) {
+        Ok(_) => {}
+        Err(e) => {
+            panic!("{}", e);
+        }
+    }
+    Ok(())
+}
+
+fn cache_on() -> bool {
+    CACHE_CONTEXT.get().unwrap().cache_on
+}
+
+fn cache_manager() -> &'static DNSCacheManager {
+    &CACHE_CONTEXT.get().unwrap().manager
+}
 
 pub fn get_answer(query: &DNSQuery) -> Option<DNSAnswer> {
     if !cache_on() {
         return None;
     }
-    CACHE_MANAGER.get(query.get_domain())
+    cache_manager().get(query.get_domain())
         .map(|r|
             DNSAnswer::from_cache(query.get_id().clone(), r.value()))
 }
@@ -185,7 +214,7 @@ pub fn store_answer(answer: &DNSAnswer) {
     if !cache_on() {
         return;
     }
-    CACHE_MANAGER.store(answer.to_cache())
+    cache_manager().store(answer.to_cache())
 }
 
 pub async fn run_abort_action() -> Result<()> {
@@ -193,12 +222,12 @@ pub async fn run_abort_action() -> Result<()> {
         info!("缓存已禁用");
         return Ok(());
     }
-    if CACHE_MANAGER.records.is_empty() {
+    if cache_manager().records.is_empty() {
         info!("没有缓存需要写入文件");
         return Ok(());
     }
     let mut file = File::create("cache").await?;
-    file.write_all(CACHE_MANAGER.to_file_bytes().as_slice()).await?;
+    file.write_all(cache_manager().to_file_bytes().as_slice()).await?;
     info!("缓存全部写入了文件! 文件名称是cache");
     Ok(())
 }

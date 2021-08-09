@@ -1,39 +1,74 @@
 use std::collections::HashSet;
-use once_cell::sync::Lazy;
-use tokio::task::block_in_place;
-use tokio::runtime::Handle;
 use tokio::fs::File;
 use crate::system::Result;
 use tokio::io::{BufReader, AsyncBufReadExt, AsyncBufRead};
 use regex::Regex;
 use std::process::Stdio;
+use crate::config::Config;
+use tokio::sync::OnceCell;
+use tokio::process::Command;
 
 const GET_DOMAIN_REGEX: &str = "address /([a-zA-Z0-9][-a-zA-Z0-9]{0,62}(\\.[a-zA-Z0-9][-a-zA-Z0-9]{0,62})+)/#";
 
-pub static FILTER_SET: Lazy<HashSet<String>> = Lazy::new(|| {
-    block_in_place(move || {
-        Handle::current().block_on(async move {
-            match read_url_to_filter("https://raw.githubusercontent.com/dunmengjun\
-            /SmartDNS-GFWList/master/test_url_filter.txt").await {
+struct FilterContext {
+    set: HashSet<String>,
+}
+
+impl FilterContext {
+    async fn from(config: &Config) -> Self {
+        let mut set = HashSet::new();
+        for path in &config.filters {
+            let result = if path.starts_with("http") {
+                read_url_to_filter(path).await
+            } else {
+                read_file_to_filter(path).await
+            };
+            let temp_set = match result {
                 Ok(set) => set,
                 Err(e) => {
                     error!("error occur in filter set init: {:?}", e);
                     HashSet::new()
                 }
-            }
-        })
-    })
-});
+            };
+            set.extend(temp_set)
+        }
+        debug!("filter init done, set len = {}", set.len());
+        FilterContext {
+            set
+        }
+    }
+}
+
+static FILTER_CONTEXT: OnceCell<FilterContext> = OnceCell::const_new();
+
+pub async fn init_context(config: &Config) -> Result<()> {
+    let context = FilterContext::from(config).await;
+    match FILTER_CONTEXT.set(context) {
+        Ok(_) => {}
+        Err(e) => {
+            panic!("{}", e);
+        }
+    }
+    Ok(())
+}
+
+fn filter_set() -> &'static HashSet<String> {
+    &FILTER_CONTEXT.get().unwrap().set
+}
 
 async fn read_url_to_filter(url: &str) -> Result<HashSet<String>> {
-    let mut child = tokio::process::Command::new("curl")
+    let mut child = Command::new("curl")
         .arg("-k")
         .arg("-s")
         .arg(url)
         .stdout(Stdio::piped())
         .spawn()?;
     let reader = BufReader::new(child.stdout.take().unwrap());
-    child.wait().await?;
+    tokio::spawn(async move {
+        let status = child.wait().await
+            .expect("filter curl process encountered an error");
+        debug!("filter curl status was: {}", status);
+    });
     read_to_filter(reader).await
 }
 
@@ -79,7 +114,7 @@ pub fn contain(domain: String) -> bool {
             string.push_str(".");
         }
         string.remove(string.len() - 1);
-        if FILTER_SET.contains(&string) {
+        if filter_set().contains(&string) {
             return true;
         }
     }

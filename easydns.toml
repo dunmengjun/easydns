@@ -1,0 +1,22 @@
+port = 2053 #等于0是随机port
+servers = [
+    "114.114.114.114:53",
+    "8.8.8.8:53",
+    "1.1.1.1:53"
+]
+servers-strategy = 0 #默认是0 定时优选,  1是不优选 从所有上游服务器获取结果
+servers-prior-choice-durtion = 12 #单位是小时
+
+cache = false
+cache-num = 1000
+cache-file = "cache"
+
+ip-prior-choice = true
+
+# filter数组，值可以是文件路径或者是url路径, 会自动去重，里面的条目会从下往上覆盖
+# 格式是这种 address /00-gov.cn/#
+filters = [
+    "smartdns_anti_ad.conf.txt",
+    "https://raw.githubusercontent.com/dunmengjun/SmartDNS-GFWList/master/smartdns_anti_ad.conf"
+]
+log-level = "info" # 六个值 trace debug info warn error off 从前往后日志越少。

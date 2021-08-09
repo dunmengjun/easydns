@@ -3,10 +3,12 @@ use crate::buffer::PacketBuffer;
 use crate::cache::DNSCacheRecord;
 use std::net::{IpAddr, Ipv4Addr};
 use crate::system::next_id;
-use crate::config::{QUERY_ONLY_RECURSIVELY, QUERY_RECURSIVELY_AD};
 
 const C_FACTOR: u8 = 192u8;
 const DC_FACTOR: u16 = 16383u16;
+
+const QUERY_ONLY_RECURSIVELY: u16 = 0x0100;
+const QUERY_RECURSIVELY_AD: u16 = 0x0120;
 
 fn parse_name(buffer: &mut PacketBuffer, name_vec: &mut Vec<u8>) {
     if buffer.peek() & C_FACTOR == C_FACTOR {
