@@ -159,7 +159,7 @@ impl CacheContext {
                 manager: DNSCacheManager::from(config.cache_num),
             };
         }
-        let manager = match File::open(config.cache_file).await {
+        let manager = match File::open(&config.cache_file).await {
             Ok(mut file) => {
                 let file_vec = &mut Vec::new();
                 file.read_to_end(file_vec).await.unwrap();

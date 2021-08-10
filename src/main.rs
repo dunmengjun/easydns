@@ -26,6 +26,7 @@ async fn main() -> Result<()> {
     handler::init_context(&config).await?;
     cache::init_context(&config).await?;
     filter::init_context(&config).await?;
+    drop(config);
 
     setup_exit_process_task();
     setup_answer_accept_task();

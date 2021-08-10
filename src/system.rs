@@ -45,7 +45,7 @@ pub fn setup_panic_hook() {
 }
 
 pub fn setup_log_level(config: &Config) -> Result<()> {
-    let level = LevelFilter::from_str(config.log_level)?;
+    let level = LevelFilter::from_str(&config.log_level)?;
     log::set_max_level(level);
     Ok(())
 }

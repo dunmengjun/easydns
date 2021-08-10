@@ -1,36 +1,48 @@
 use crate::system::Result;
+use tokio::fs::File;
+use tokio::io::AsyncReadExt;
+use toml::Value;
 
 pub struct Config {
     pub cache_on: bool,
-    pub cache_file: &'static str,
+    pub cache_file: String,
     pub cache_num: usize,
-    pub port: usize,
-    pub servers: Vec<&'static str>,
-    pub filters: Vec<&'static str>,
-    pub log_level: &'static str,
+    pub port: u16,
+    pub servers: Vec<String>,
+    pub filters: Vec<String>,
+    pub log_level: String,
 }
 
 impl Config {
-    fn new() -> Self {
+    fn from(value: Value) -> Self {
+        let cache_file = value["cache-file"].as_str().map(|e| String::from(e))
+            .unwrap_or("cache".into());
+        let cache_on = value["cache"].as_bool().unwrap_or(true);
+        let cache_num = value["cache-num"].as_integer().unwrap_or(1000) as usize;
+        let port = value["port"].as_integer().unwrap_or(2053) as u16;
+        let servers = value["servers"].as_array().map(|e| {
+            e.iter().map(|e| String::from(e.as_str().unwrap())).collect()
+        }).unwrap_or(vec![]);
+        let filters = value["filters"].as_array().map(|e| {
+            e.iter().map(|e| String::from(e.as_str().unwrap())).collect()
+        }).unwrap_or(vec![]);
+        let log_level = value["log-level"].as_str().map(|e| String::from(e))
+            .unwrap_or("error".into());
         Config {
-            cache_on: false,
-            cache_file: "cache",
-            cache_num: 1000,
-            port: 2053,
-            servers: vec![
-                "114.114.114.114:53",
-                "8.8.8.8:53",
-                "1.1.1.1:53",
-            ],
-            filters: vec![
-                "smartdns_anti_ad.conf.txt",
-                "https://raw.githubusercontent.com/dunmengjun/SmartDNS-GFWList/master/smartdns_anti_ad.conf",
-            ],
-            log_level: "DEBUG",
+            cache_on,
+            cache_file,
+            cache_num,
+            port,
+            servers,
+            filters,
+            log_level,
         }
     }
 }
 
 pub async fn init_from_toml() -> Result<Config> {
-    Ok(Config::new())
+    let mut file = File::open("easydns.toml").await?;
+    let buf = &mut String::new();
+    file.read_to_string(buf).await?;
+    Ok(Config::from(buf.parse::<Value>()?))
 }

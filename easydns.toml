@@ -7,7 +7,7 @@ servers = [
 servers-strategy = 0 #默认是0 定时优选,  1是不优选 从所有上游服务器获取结果
 servers-prior-choice-durtion = 12 #单位是小时
 
-cache = false
+cache = true
 cache-num = 1000
 cache-file = "cache"
 
@@ -19,4 +19,4 @@ filters = [
     "smartdns_anti_ad.conf.txt",
     "https://raw.githubusercontent.com/dunmengjun/SmartDNS-GFWList/master/smartdns_anti_ad.conf"
 ]
-log-level = "info" # 六个值 trace debug info warn error off 从前往后日志越少。
+log-level = "debug" # 六个值 trace debug info warn error off 从前往后日志越少。
