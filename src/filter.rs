@@ -1,5 +1,5 @@
 use crate::config::Config;
-use crate::system::Result;
+use crate::system::{Result, FileNotFoundError};
 use regex::Regex;
 use std::collections::HashSet;
 use std::process::Stdio;
@@ -55,7 +55,7 @@ async fn read_resources_to_filter(paths: &Vec<String>) -> HashSet<FilterItem> {
                 }
             }
             Err(e) => {
-                error!("error occur in filter set init: {:?}", e);
+                error!("{:?}", e);
             }
         };
     }
@@ -89,7 +89,12 @@ async fn read_url_to_filter(url: &str) -> Result<HashSet<FilterItem>> {
 }
 
 async fn read_file_to_filter(file_path: &str) -> Result<HashSet<FilterItem>> {
-    let file = File::open(file_path).await?;
+    let file = File::open(file_path).await.map_err(|e| {
+        FileNotFoundError {
+            path: String::from(file_path),
+            supper: Box::new(e),
+        }
+    })?;
     let reader = BufReader::new(file);
     read_to_filter(reader).await
 }

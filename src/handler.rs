@@ -19,7 +19,7 @@ use tokio_icmp::Pinger;
 pub struct HandlerContext {
     server_socket: UdpSocket,
     main_socket: UdpSocket,
-    pinger: Pinger,
+    pinger: Option<Pinger>,
     reg_table: DashMap<u16, Sender<DNSAnswer>>,
     servers: Vec<String>,
     fast_server: Mutex<String>,
@@ -27,7 +27,11 @@ pub struct HandlerContext {
 
 impl HandlerContext {
     pub async fn from(config: &Config) -> Result<Self> {
-        let pinger = tokio_icmp::Pinger::new().await?;
+        let pinger = if config.ip_choose_strategy == 0 {
+            None
+        } else {
+            Some(tokio_icmp::Pinger::new().await?)
+        };
         let server_socket = UdpSocket::bind(("0.0.0.0", config.port)).await?;
         let upstream_socket = UdpSocket::bind("0.0.0.0:0").await?;
         let answer_reg_table = DashMap::new();
@@ -229,17 +233,21 @@ impl Handler for IpChoiceMaker {
     async fn handle(&self, clain: &mut Clain, query: &DNSQuery) -> Result<DNSAnswer> {
         let mut answer = clain.next(query).await?;
         let ip_vec = answer.get_ip_vec();
-        if ip_vec.len() == 1 {
+        if let Some(pinger) = &context().pinger {
+            if ip_vec.len() == 1 {
+                answer.retain_ip(ip_vec[0]);
+                return Ok(answer);
+            }
+            let mut ping_future_vec = Vec::new();
+            for ip in &ip_vec {
+                let future = pinger.chain(ip.clone()).send();
+                ping_future_vec.push(future);
+            }
+            let index = select_all(ping_future_vec).await.1;
+            answer.retain_ip(ip_vec[index]);
+        } else {
             answer.retain_ip(ip_vec[0]);
-            return Ok(answer);
         }
-        let mut ping_future_vec = Vec::new();
-        for ip in &ip_vec {
-            let future = context().pinger.chain(ip.clone()).send();
-            ping_future_vec.push(future);
-        }
-        let index = select_all(ping_future_vec).await.1;
-        answer.retain_ip(ip_vec[index]);
         Ok(answer)
     }
 }

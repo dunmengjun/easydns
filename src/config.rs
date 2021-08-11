@@ -11,6 +11,7 @@ pub struct Config {
     pub servers: Vec<String>,
     pub filters: Vec<String>,
     pub log_level: String,
+    pub ip_choose_strategy: usize,
 }
 
 impl Config {
@@ -28,6 +29,8 @@ impl Config {
         }).unwrap_or(vec![]);
         let log_level = value["log-level"].as_str().map(|e| String::from(e))
             .unwrap_or("error".into());
+        let ip_choose_strategy = value["ip-choose-strategy"].as_integer()
+            .unwrap_or(0) as usize;
         Config {
             cache_on,
             cache_file,
@@ -36,6 +39,7 @@ impl Config {
             servers,
             filters,
             log_level,
+            ip_choose_strategy,
         }
     }
 }
