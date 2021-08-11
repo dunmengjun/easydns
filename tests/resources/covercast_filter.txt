@@ -1,0 +1,5 @@
+#TITLE=anti-AD for SmartDNS
+#VER=20210806113134
+#URL=https://github.com/privacy-protection-tools/anti-AD
+#TOTAL_LINES=44642
+address /kwcdn.000dn.com/d
