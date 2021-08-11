@@ -1,15 +1,15 @@
 #![feature(panic_info_message)]
 
 mod buffer;
-mod protocol;
 mod cache;
-mod system;
-mod handler;
-mod filter;
 mod config;
+mod filter;
+mod handler;
+mod protocol;
+mod system;
 
-use crate::system::{Result, setup_exit_process_task};
 use crate::handler::*;
+use crate::system::{setup_exit_process_task, Result};
 use simple_logger::SimpleLogger;
 
 #[macro_use]
@@ -38,13 +38,8 @@ async fn main() -> Result<()> {
         tokio::spawn(async move {
             match handle_task(src, buffer).await {
                 Ok(_) => {}
-                Err(e) => {
-                    error!("error occur here main{:?}", e)
-                }
+                Err(e) => error!("error occur here main{:?}", e),
             }
         });
     }
 }
-
-
-

@@ -11,7 +11,7 @@ use std::net::SocketAddr;
 use std::sync::Mutex;
 use tokio::net::UdpSocket;
 use tokio::sync::oneshot::Sender;
-use tokio::sync::{OnceCell, oneshot};
+use tokio::sync::{oneshot, OnceCell};
 use tokio::time::interval;
 use tokio::time::Duration;
 use tokio_icmp::Pinger;
@@ -98,7 +98,10 @@ impl HandlerContext {
 
 pub async fn recv_query() -> Result<(PacketBuffer, SocketAddr)> {
     let mut buffer = PacketBuffer::new();
-    let (_, src) = context().main_socket.recv_from(buffer.as_mut_slice()).await?;
+    let (_, src) = context()
+        .main_socket
+        .recv_from(buffer.as_mut_slice())
+        .await?;
     Ok((buffer, src))
 }
 
@@ -109,8 +112,7 @@ pub async fn handle_task(src: SocketAddr, buffer: PacketBuffer) -> Result<()> {
     query_clain.add(CacheHandler);
     query_clain.add(IpChoiceMaker);
     query_clain.add(QuerySender);
-    let answer = query_clain
-        .next(&DNSQuery::from(buffer)).await?;
+    let answer = query_clain.next(&DNSQuery::from(buffer)).await?;
     context().back_to_client(src, answer).await
 }
 
@@ -255,4 +257,3 @@ impl Handler for DomainFilter {
         clain.next(query).await
     }
 }
-
