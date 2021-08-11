@@ -34,7 +34,7 @@ fn unzip_domain(cursor: &mut PacketBuffer) -> Vec<u8> {
     domain_vec
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Header {
     id: u16,
     flags: u16,
@@ -85,7 +85,7 @@ impl Header {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Question {
     name: Vec<u8>,
     _type: u16,
@@ -123,7 +123,7 @@ impl Question {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DNSQuery {
     header: Header,
     questions: Vec<Question>,
