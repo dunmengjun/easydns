@@ -20,6 +20,7 @@ pub struct DNSCacheRecord {
     pub domain: Vec<u8>,
     pub address: Vec<u8>,
     pub ttl: u128,
+    pub pass_time: u128,
     pub last_used_time: u128,
 }
 
@@ -32,11 +33,24 @@ impl DNSCacheRecord {
             domain,
             address,
             ttl: ttl as u128 * 1000 as u128,
+            pass_time: 0,
             last_used_time: get_timestamp(),
         }
     }
     fn is_expired(&self) -> bool {
-        (get_timestamp() - self.last_used_time) > self.ttl
+        self.pass_time > self.ttl
+    }
+
+    fn is_expired_and_timeout(&self, timeout: usize) -> bool {
+        if context().cache_get_strategy == 0 {
+            self.is_expired()
+        } else {
+            self.pass_time > self.ttl + timeout as u128
+        }
+    }
+
+    fn is_in_timeout(&self) -> bool {
+        self.pass_time > self.ttl
     }
 
     pub fn get_domain(&self) -> &Vec<u8> {
@@ -47,11 +61,16 @@ impl DNSCacheRecord {
     }
 
     pub fn get_ttl_secs(&self) -> u128 {
-        self.ttl / 1000
+        if self.ttl < self.pass_time {
+            0
+        } else {
+            (self.ttl - self.pass_time) / 1000
+        }
     }
-    pub fn pass_ttl(&mut self) {
+    pub fn pass_time(&mut self) {
         let current_time = get_timestamp();
-        self.ttl = self.ttl - (current_time - self.last_used_time);
+        let time = current_time - self.last_used_time;
+        self.pass_time += time;
         self.last_used_time = current_time;
     }
 
@@ -62,6 +81,8 @@ impl DNSCacheRecord {
         vec.extend(&self.address);
         vec.push(F_DELIMITER);
         vec.extend(&(self.ttl as u32).to_be_bytes());
+        vec.push(F_DELIMITER);
+        vec.extend(&(self.pass_time as u32).to_be_bytes());
         vec.push(F_DELIMITER);
         vec.extend(&self.last_used_time.to_be_bytes());
         vec.push(F_SPACE);
@@ -77,15 +98,21 @@ impl DNSCacheRecord {
             buf[i] = split[2][i]
         }
         let ttl = u32::from_be_bytes(buf) as u128;
+        let mut buf = [0u8; 4];
+        for i in 0..4 {
+            buf[i] = split[3][i]
+        }
+        let pass_time = u32::from_be_bytes(buf) as u128;
         let mut buf = [0u8; 16];
         for i in 0..16 {
-            buf[i] = split[3][i];
+            buf[i] = split[4][i];
         }
         let last_used_time = u128::from_be_bytes(buf);
         DNSCacheRecord {
             domain,
             address,
             ttl,
+            pass_time,
             last_used_time,
         }
     }
@@ -114,10 +141,10 @@ impl DNSCacheManager {
     }
     fn get(&self, domain: &Vec<u8>) -> Option<Ref<Vec<u8>, DNSCacheRecord, RandomState>> {
         self.records.remove_if(domain, |_, v| {
-            v.is_expired()
+            v.is_expired_and_timeout(context().cache_ttl_timeout_ms)
         });
         self.records.get_mut(domain).map(|mut e| {
-            e.pass_ttl();
+            e.pass_time();
             e.downgrade()
         })
     }
@@ -134,7 +161,8 @@ impl DNSCacheManager {
         let split = bytes.split(|e| F_SPACE == *e);
         let records = DashMap::new();
         for r_bytes in split {
-            let record = DNSCacheRecord::from_bytes(r_bytes);
+            let mut record = DNSCacheRecord::from_bytes(r_bytes);
+            record.pass_time();
             if !record.is_expired() {
                 records.insert(record.domain.clone(), record);
             }
@@ -149,6 +177,9 @@ impl DNSCacheManager {
 struct CacheContext {
     cache_on: bool,
     manager: DNSCacheManager,
+    cache_get_strategy: usize,
+    cache_ttl_timeout_ms: usize,
+    cache_file: String,
 }
 
 impl CacheContext {
@@ -157,6 +188,9 @@ impl CacheContext {
             return CacheContext {
                 cache_on: false,
                 manager: DNSCacheManager::from(config.cache_num),
+                cache_get_strategy: config.cache_get_strategy,
+                cache_ttl_timeout_ms: config.cache_ttl_timeout_ms,
+                cache_file: config.cache_file.clone(),
             };
         }
         let manager = match File::open(&config.cache_file).await {
@@ -176,6 +210,9 @@ impl CacheContext {
         CacheContext {
             cache_on: config.cache_on,
             manager,
+            cache_get_strategy: config.cache_get_strategy,
+            cache_ttl_timeout_ms: config.cache_ttl_timeout_ms,
+            cache_file: config.cache_file.clone(),
         }
     }
 }
@@ -193,41 +230,41 @@ pub async fn init_context(config: &Config) -> Result<()> {
     Ok(())
 }
 
-fn cache_on() -> bool {
-    CACHE_CONTEXT.get().unwrap().cache_on
+fn context() -> &'static CacheContext {
+    &CACHE_CONTEXT.get().unwrap()
 }
 
-fn cache_manager() -> &'static DNSCacheManager {
-    &CACHE_CONTEXT.get().unwrap().manager
-}
-
-pub fn get_answer(query: &DNSQuery) -> Option<DNSAnswer> {
-    if !cache_on() {
+pub fn get_answer<F>(query: &DNSQuery, async_func: F) -> Option<DNSAnswer> where F: Fn(DNSQuery) {
+    if !context().cache_on {
         return None;
     }
-    cache_manager().get(query.get_domain())
-        .map(|r|
-            DNSAnswer::from_cache(query.get_id().clone(), r.value()))
+    context().manager.get(query.get_domain())
+        .map(|r| {
+            if context().cache_get_strategy == 1 && r.is_in_timeout() {
+                async_func(query.clone());
+            }
+            DNSAnswer::from_cache(query.get_id().clone(), r.value())
+        })
 }
 
 pub fn store_answer(answer: &DNSAnswer) {
-    if !cache_on() {
+    if !context().cache_on {
         return;
     }
-    cache_manager().store(answer.to_cache())
+    context().manager.store(answer.to_cache())
 }
 
 pub async fn run_abort_action() -> Result<()> {
-    if !cache_on() {
+    if !context().cache_on {
         info!("缓存已禁用");
         return Ok(());
     }
-    if cache_manager().records.is_empty() {
+    if context().manager.records.is_empty() {
         info!("没有缓存需要写入文件");
         return Ok(());
     }
-    let mut file = File::create("cache").await?;
-    file.write_all(cache_manager().to_file_bytes().as_slice()).await?;
+    let mut file = File::create(&context().cache_file).await?;
+    file.write_all(context().manager.to_file_bytes().as_slice()).await?;
     info!("缓存全部写入了文件! 文件名称是cache");
     Ok(())
 }

@@ -12,6 +12,8 @@ pub struct Config {
     pub filters: Vec<String>,
     pub log_level: String,
     pub ip_choose_strategy: usize,
+    pub cache_get_strategy: usize,
+    pub cache_ttl_timeout_ms: usize,
 }
 
 impl Config {
@@ -31,6 +33,10 @@ impl Config {
             .unwrap_or("error".into());
         let ip_choose_strategy = value["ip-choose-strategy"].as_integer()
             .unwrap_or(0) as usize;
+        let cache_get_strategy = value["cache-get-strategy"].as_integer()
+            .unwrap_or(0) as usize;
+        let cache_ttl_timeout_ms = value["cache-ttl-timeout-ms"].as_integer()
+            .unwrap_or(0) as usize;
         Config {
             cache_on,
             cache_file,
@@ -40,6 +46,8 @@ impl Config {
             filters,
             log_level,
             ip_choose_strategy,
+            cache_get_strategy,
+            cache_ttl_timeout_ms
         }
     }
 }

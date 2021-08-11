@@ -164,7 +164,7 @@ pub fn setup_choose_fast_server_task() {
 }
 
 struct Clain {
-    funcs: Vec<Box<dyn Handler + Send + Sync>>,
+    pub funcs: Vec<Box<dyn Handler>>,
 }
 
 impl Clain {
@@ -179,13 +179,33 @@ impl Clain {
     async fn next(&mut self, query: &DNSQuery) -> Result<DNSAnswer> {
         self.funcs.remove(0).handle(self, query).await
     }
+
+    fn clone(&self) -> Self {
+        let mut vec = Vec::new();
+        self.funcs.iter().for_each(|e| vec.push(e.clone_handler()));
+        Clain {
+            funcs: vec
+        }
+    }
 }
 
 #[async_trait]
-trait Handler {
+trait Handler: Send + Sync + HandlerCloner {
     async fn handle(&self, clain: &mut Clain, query: &DNSQuery) -> Result<DNSAnswer>;
 }
 
+trait HandlerCloner {
+    fn clone_handler(&self) -> Box<dyn Handler>;
+}
+
+impl<T> HandlerCloner for T where T: 'static + Clone + Handler {
+    fn clone_handler(&self) -> Box<dyn Handler> {
+        Box::new(self.clone())
+    }
+}
+
+
+#[derive(Clone)]
 struct LegalChecker;
 
 #[async_trait]
@@ -202,12 +222,26 @@ impl Handler for LegalChecker {
     }
 }
 
+#[derive(Clone)]
 struct CacheHandler;
 
 #[async_trait]
 impl Handler for CacheHandler {
     async fn handle(&self, clain: &mut Clain, query: &DNSQuery) -> Result<DNSAnswer> {
-        if let Some(answer) = cache::get_answer(query) {
+        let async_get_data_func = |query: DNSQuery| {
+            let mut temp_chain = clain.clone();
+            tokio::spawn(async move {
+                match temp_chain.next(&query).await {
+                    Ok(answer) => {
+                        cache::store_answer(&answer);
+                    }
+                    Err(e) => {
+                        error!("async get answer from server error: {:?}", e)
+                    }
+                }
+            });
+        };
+        if let Some(answer) = cache::get_answer(query, async_get_data_func) {
             return Ok(answer);
         } else {
             let result = clain.next(query).await?;
@@ -217,6 +251,7 @@ impl Handler for CacheHandler {
     }
 }
 
+#[derive(Clone)]
 struct QuerySender;
 
 #[async_trait]
@@ -226,6 +261,7 @@ impl Handler for QuerySender {
     }
 }
 
+#[derive(Clone)]
 struct IpChoiceMaker;
 
 #[async_trait]
@@ -252,6 +288,7 @@ impl Handler for IpChoiceMaker {
     }
 }
 
+#[derive(Clone)]
 struct DomainFilter;
 
 #[async_trait]
