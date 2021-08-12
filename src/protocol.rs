@@ -34,7 +34,7 @@ fn unzip_domain(cursor: &mut PacketBuffer) -> Vec<u8> {
     domain_vec
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 struct Header {
     id: u16,
     flags: u16,
@@ -85,7 +85,7 @@ impl Header {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 struct Question {
     name: Vec<u8>,
     _type: u16,
@@ -214,7 +214,7 @@ fn wrap_dns_domain(domain: &str) -> Vec<u8> {
     vec
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 struct ResourceRecord {
     name: Vec<u8>,
     _type: u16,
@@ -261,7 +261,7 @@ impl ResourceRecord {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct DNSAnswer {
     header: Header,
     questions: Vec<Question>,
@@ -452,9 +452,30 @@ impl DNSAnswer {
                 }
             }
         }
+        self.header.answer_count = self.answers.len() as u16;
     }
 
     pub fn is_empty(&self) -> bool {
         self.answers.is_empty()
+    }
+}
+
+#[cfg(test)]
+pub mod tests {
+    use crate::protocol::{DNSAnswer, DNSQuery, ResourceRecord};
+
+    pub fn build_simple_answer(query: &DNSQuery, data: Vec<u8>, ttl: u32) -> DNSAnswer {
+        let mut answer = DNSAnswer::from_query(query);
+        let record = ResourceRecord {
+            name: query.get_domain().clone(),
+            _type: 1,
+            class: 1,
+            ttl,
+            data_len: data.len() as u16,
+            data,
+        };
+        answer.answers.push(record);
+        answer.header.answer_count = answer.answers.len() as u16;
+        answer
     }
 }

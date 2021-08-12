@@ -182,6 +182,7 @@ mod tests {
     fn test_handle_one_line() {
         let line_regex = Regex::new(GET_DOMAIN_REGEX).unwrap();
         let x = String::from("address /kwcscdn.000dn.com/#");
+
         let result = handle_one_line(&line_regex, &x);
 
         assert_eq!(result, Some(String::from("kwcscdn.000dn.com").into()));
@@ -191,6 +192,7 @@ mod tests {
     async fn test_read_file_to_filter() -> Result<()> {
         let filter = read_resource_to_filter(
             "./tests/resources/test_filter.txt").await?;
+
         let mut expected: HashSet<FilterItem> = HashSet::new();
         expected.insert(String::from("00-gov.cn").into());
         expected.insert(String::from("kwcdn.000dn.com").into());
@@ -204,6 +206,7 @@ mod tests {
             "https://raw.githubusercontent.com/dunmengjun\
             /SmartDNS-GFWList/master/test_url_filter.txt",
         ).await?;
+
         let mut expected: HashSet<FilterItem> = HashSet::new();
         expected.insert(String::from("00-gov.cn").into());
         expected.insert(String::from("kwcdn.000dn.com").into());
@@ -215,7 +218,9 @@ mod tests {
     async fn test_filter_item_overcast() -> Result<()> {
         let filters: Vec<String> = vec!["./tests/resources/test_filter.txt".into(),
                                         "./tests/resources/covercast_filter.txt".into()];
+
         let result = read_resources_to_filter(&filters).await;
+
         let mut expected: HashSet<FilterItem> = HashSet::new();
         expected.insert(String::from("00-gov.cn").into());
         assert_eq!(expected, result);
@@ -225,7 +230,9 @@ mod tests {
     #[tokio::test]
     async fn test_filter_path_empty() -> Result<()> {
         let filters: Vec<String> = vec![];
+
         let result = read_resources_to_filter(&filters).await;
+
         assert!(result.is_empty());
         Ok(())
     }

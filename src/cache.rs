@@ -16,6 +16,7 @@ pub struct DNSCacheManager {
     limit_len: usize,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DNSCacheRecord {
     pub domain: Vec<u8>,
     pub address: Vec<u8>,
@@ -28,11 +29,11 @@ impl DNSCacheRecord {
     pub fn from(
         domain: Vec<u8>,
         address: Vec<u8>,
-        ttl: u32) -> Self {
+        ttl_secs: u32) -> Self {
         DNSCacheRecord {
             domain,
             address,
-            ttl: ttl as u128 * 1000 as u128,
+            ttl: ttl_secs as u128 * 1000 as u128,
             pass_time: 0,
             last_used_time: get_timestamp(),
         }
@@ -242,7 +243,7 @@ fn is_should_removed(r: &DNSCacheRecord) -> bool {
     }
 }
 
-pub fn get_answer<F>(query: &DNSQuery, async_func: F) -> Option<DNSAnswer> where F: Fn(DNSQuery) {
+pub fn get_answer<F>(query: &DNSQuery, async_func: F) -> Option<DNSAnswer> where F: FnOnce(DNSQuery) {
     if !context().cache_on {
         return None;
     }
@@ -275,4 +276,152 @@ pub async fn run_abort_action() -> Result<()> {
     file.write_all(context().manager.to_file_bytes().as_slice()).await?;
     info!("缓存全部写入了文件! 文件名称是cache");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::cache::{get_answer, init_context, context, DNSCacheRecord, store_answer, CACHE_CONTEXT, CacheContext};
+    use crate::protocol::{DNSQuery, DNSAnswer};
+    use crate::config::Config;
+    use crate::system::Result;
+    use crate::protocol::tests::build_simple_answer;
+    use crate::config::tests::init_test_config;
+
+    #[tokio::test]
+    async fn should_return_none_when_get_answer_given_cache_on_is_false() -> Result<()> {
+        init_cache_context(|config| {
+            config.cache_on = false;
+        }).await?;
+        let query = DNSQuery::from_domain("www.baidu.com");
+
+        let result = get_answer(&query, |_query| assert!(false));
+
+        assert!(result.is_none());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn should_return_answer_when_get_answer_given_cache_is_enable_and_has_cache() -> Result<()> {
+        init_cache_context(|config| {
+            config.cache_on = true;
+            config.cache_get_strategy = 0;
+        }).await?;
+        let query = init_context_data(|r| {});
+
+        let result = get_answer(&query, |_query| assert!(false));
+
+        let expected = build_simple_answer(&query, vec![1, 1, 1, 1], 1);
+        assert_eq!(Some(expected), result);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn should_return_none_when_get_answer_given_record_is_expired() -> Result<()> {
+        init_cache_context(|config| {
+            config.cache_on = true;
+            config.cache_get_strategy = 0;
+        }).await?;
+        let query = init_context_data(|record| {
+            record.ttl = 1000;
+            record.pass_time = 1001;
+        });
+
+        let result = get_answer(&query, |_query| assert!(false));
+
+        assert!(context().manager.records.is_empty());
+        assert_eq!(None, result);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn should_return_answer_and_call_async_method_when_get_answer_given_cache_strategy_is_1_and_record_is_in_timeout()
+        -> Result<()> {
+        init_cache_context(|config| {
+            config.cache_on = true;
+            config.cache_get_strategy = 1;
+            config.cache_ttl_timeout_ms = 1000;
+        }).await?;
+        let query = init_context_data(|record| {
+            record.ttl = 1000;
+            record.pass_time = 1001;
+        });
+        let mut async_call = false;
+
+        let result = get_answer(&query, |_query| { async_call = true; });
+
+        let expected = build_simple_answer(&query, vec![1, 1, 1, 1], 0);
+        assert!(async_call);
+        assert_eq!(Some(expected), result);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn should_return_none_when_get_answer_given_cache_strategy_is_1_and_record_is_over_timeout()
+        -> Result<()> {
+        init_cache_context(|config| {
+            config.cache_on = true;
+            config.cache_get_strategy = 1;
+            config.cache_ttl_timeout_ms = 1000;
+        }).await?;
+        let query = init_context_data(|record| {
+            record.ttl = 1000;
+            record.pass_time = 2001;
+        });
+
+        let result = get_answer(&query, |_query| assert!(false));
+
+        assert!(context().manager.records.is_empty());
+        assert_eq!(None, result);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn should_no_record_in_context_when_store_answer_given_cache_on_is_false() -> Result<()> {
+        init_cache_context(|config| {
+            config.cache_on = false;
+        }).await?;
+        let query = DNSQuery::from_domain("www.baidu.com");
+        let answer = build_simple_answer(&query, vec![1, 1, 1, 1], 1);
+
+        store_answer(&answer);
+
+        assert!(context().manager.records.is_empty());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn should_store_record_in_context_when_store_answer_given_cache_on_is_true() -> Result<()> {
+        init_cache_context(|config| {
+            config.cache_on = true;
+        }).await?;
+        let query = DNSQuery::from_domain("www.baidu.com");
+        let answer = build_simple_answer(&query, vec![1, 1, 1, 1], 1);
+
+        store_answer(&answer);
+
+        assert_eq!(1, context().manager.records.len());
+        let expected = init_record(query.get_domain().clone());
+        let result = context().manager.records.get(query.get_domain()).unwrap().eq(&expected);
+        assert!(result);
+        Ok(())
+    }
+
+    async fn init_cache_context(f: impl Fn(&mut Config)) -> Result<()> {
+        let mut config = init_test_config();
+        f(&mut config);
+        init_context(&config).await?;
+        Ok(())
+    }
+
+    fn init_context_data(f: impl Fn(&mut DNSCacheRecord)) -> DNSQuery {
+        let query = DNSQuery::from_domain("www.baidu.com");
+        let mut record = init_record(query.get_domain().clone());
+        f(&mut record);
+        context().manager.records.insert(record.domain.clone(), record.clone());
+        query
+    }
+
+    fn init_record(domain: Vec<u8>) -> DNSCacheRecord {
+        DNSCacheRecord::from(domain, vec![1, 1, 1, 1], 1)
+    }
 }

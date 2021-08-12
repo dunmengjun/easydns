@@ -66,3 +66,25 @@ pub async fn init_from_toml() -> Result<Config> {
     file.read_to_string(buf).await?;
     Ok(Config::from(buf.parse::<Value>()?))
 }
+
+#[cfg(test)]
+pub mod tests {
+    use crate::config::Config;
+
+    pub fn init_test_config() -> Config {
+        Config {
+            cache_on: false,
+            cache_file: "".to_string(),
+            cache_num: 0,
+            port: 0,
+            servers: vec![],
+            filters: vec![],
+            log_level: "".to_string(),
+            ip_choose_strategy: 0,
+            cache_get_strategy: 0,
+            cache_ttl_timeout_ms: 0,
+            server_choose_strategy: 0,
+            server_choose_duration_h: 0,
+        }
+    }
+}

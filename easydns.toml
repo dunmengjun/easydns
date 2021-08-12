@@ -2,7 +2,7 @@
 # 等于0是随机port
 port = 2053
 
-#上游dns服务器
+#上游dns服务器，目前没有分组的功能，主要是认为用处不大
 servers = [
     "114.114.114.114:53",
     "8.8.8.8:53",
@@ -30,14 +30,15 @@ cache-get-strategy = 0
 
 # 缓存策略是1的情况下, 此项生效, 会在dns记录的ttl时间过期之后返回过期的记录直到新的记录从上游服务器获取到并插入缓存
 # 或者超过了设置的时间就同步去上游服务器取新的记录
-cache-ttl-timeout-ms = 1000
+cache-ttl-timeout-ms = 60000
 
 # 浏览器场景下，就算dns服务返回多个ip,浏览器也是默认取第一个，所以这里的默认策略是返回第一个ip
-# 其他大多数场景下也应该是浏览器是一致的
-# 默认是0 选择第一个ip, 1是利用ping协议选择最小延迟的一个
+# 其他大多数场景下也应该和浏览器是一致的
+# 默认是0 选择第一个ip, 1是利用ping协议选择最小延迟的一个ip
 ip-choose-strategy = 0
 
-# filter数组，值可以是文件路径或者是url路径, 会自动去重，里面的条目会从下往上覆盖
+# 在filter文件中的值会被拦截并返回soa记录，可以用于dns方式去广告
+# 值可以是文件路径或者是url路径, 会自动去重，里面的条目会从下往上覆盖
 # 格式是这种 1. address /00-gov.cn/# 加入到filter, 2. address /00-gov.cn/d, 从已经存在的filter集合中删除
 # 如果条目格式错误，会被忽略，不会报错，日志中只有debug模式会有这个日志
 filters = [
@@ -45,7 +46,7 @@ filters = [
     "./tests/resources/covercast_filter.txt",
 ]
 
-# 六个值 trace debug info warn error off 从前往后日志越少。
+# 六个值 trace debug info warn error off 从前往后日志越少。大小写都可
 # off是不输出日志
 # 日志分割，请直接搜索一下，linux下有现成的命令，很简单就可以配置，这里就不原生提供这个功能了
 log-level = "debug"
