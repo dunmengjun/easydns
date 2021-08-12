@@ -292,9 +292,10 @@ mod tests {
         }).await;
         let query = init_data(&cache_pool, |_r| {});
 
-        let result = cache_pool.get_answer(&query, || assert!(false));
+        let mut result = cache_pool.get_answer(&query, || assert!(false));
 
-        let expected = build_simple_answer(&query, vec![1, 1, 1, 1], 1);
+        result.iter_mut().for_each(|e| e.set_all_ttl(0));
+        let expected = build_simple_answer(&query, vec![1, 1, 1, 1], 0);
         assert_eq!(Some(expected), result);
         Ok(())
     }

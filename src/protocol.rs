@@ -458,6 +458,12 @@ impl DNSAnswer {
     pub fn is_empty(&self) -> bool {
         self.answers.is_empty()
     }
+
+    pub fn set_all_ttl(&mut self, ttl: u32) {
+        self.answers.iter_mut().for_each(|e| {
+            e.ttl = ttl
+        })
+    }
 }
 
 #[cfg(test)]

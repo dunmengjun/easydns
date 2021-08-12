@@ -1,17 +1,19 @@
 #![feature(panic_info_message)]
 
+use std::sync::Arc;
+
+use simple_logger::SimpleLogger;
+
+use crate::handler::*;
+use crate::system::Result;
+
 mod buffer;
 mod cache;
 mod config;
 mod filter;
-mod handler;
 mod protocol;
 mod system;
-
-use crate::handler::*;
-use crate::system::{Result};
-use simple_logger::SimpleLogger;
-use std::sync::Arc;
+mod handler;
 
 #[macro_use]
 extern crate log;
