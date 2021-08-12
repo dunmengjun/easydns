@@ -14,6 +14,8 @@ pub struct Config {
     pub ip_choose_strategy: usize,
     pub cache_get_strategy: usize,
     pub cache_ttl_timeout_ms: usize,
+    pub server_choose_strategy: usize,
+    pub server_choose_duration_h: usize,
 }
 
 impl Config {
@@ -37,6 +39,10 @@ impl Config {
             .unwrap_or(0) as usize;
         let cache_ttl_timeout_ms = value["cache-ttl-timeout-ms"].as_integer()
             .unwrap_or(0) as usize;
+        let server_choose_strategy = value["server-choose-strategy"].as_integer()
+            .unwrap_or(0) as usize;
+        let server_choose_duration_h = value["server-choose-duration-h"].as_integer()
+            .unwrap_or(12) as usize;
         Config {
             cache_on,
             cache_file,
@@ -47,7 +53,9 @@ impl Config {
             log_level,
             ip_choose_strategy,
             cache_get_strategy,
-            cache_ttl_timeout_ms
+            cache_ttl_timeout_ms,
+            server_choose_strategy,
+            server_choose_duration_h,
         }
     }
 }

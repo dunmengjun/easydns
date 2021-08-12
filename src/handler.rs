@@ -23,6 +23,8 @@ pub struct HandlerContext {
     reg_table: DashMap<u16, Sender<DNSAnswer>>,
     servers: Vec<String>,
     fast_server: Mutex<String>,
+    server_choose_strategy: usize,
+    server_choose_duration_h: usize,
 }
 
 impl HandlerContext {
@@ -44,6 +46,8 @@ impl HandlerContext {
             reg_table: answer_reg_table,
             servers: upstream_dns_servers,
             fast_server: fast_dns_server,
+            server_choose_strategy: config.server_choose_strategy,
+            server_choose_duration_h: config.server_choose_duration_h,
         })
     }
 
@@ -65,14 +69,64 @@ impl HandlerContext {
         self.exec_query(address.as_str(), query).await
     }
 
-    async fn preferred_dns_server(&self, query: DNSQuery) -> Result<()> {
+    async fn prefer_query(&self, query: &DNSQuery) -> Result<DNSAnswer> {
+        let (answer, _) = self.get_answer_from_fast_server(query).await?;
+        Ok(answer)
+    }
+
+    async fn combine_query(&self, query: &DNSQuery) -> Result<DNSAnswer> {
+        let servers = &self.servers;
+        let mut future_vec = Vec::with_capacity(servers.len());
+        for address in servers.iter() {
+            future_vec.push(self.exec_query(address.as_str(), query));
+        }
+        let mut answer = DNSAnswer::from_query(query);
+        for future in future_vec {
+            match future.await {
+                Ok(r) => {
+                    answer.combine(r);
+                }
+                Err(e) => {
+                    error!("{:?}", e);
+                }
+            }
+        }
+        if answer.is_empty() {
+            return Err("all servers return error".into());
+        }
+        Ok(answer)
+    }
+
+    async fn send_query(&self, query: &DNSQuery) -> Result<DNSAnswer> {
+        match context().server_choose_strategy {
+            0 => {
+                self.fast_query(query).await
+            }
+            1 => {
+                self.prefer_query(query).await
+            }
+            2 => {
+                self.combine_query(query).await
+            }
+            e => {
+                panic!("Unsupported server choose strategy: {}", e);
+            }
+        }
+    }
+
+    async fn get_answer_from_fast_server(&self, query: &DNSQuery) -> Result<(DNSAnswer, usize)> {
         let servers = &self.servers;
         let mut future_vec = Vec::with_capacity(servers.len());
         for address in servers.iter() {
             future_vec.push(self.exec_query(address.as_str(), &query).boxed());
         }
         let (result, index, _) = select_all(future_vec).await;
-        let _answer = result?;
+        let answer = result?;
+        Ok((answer, index))
+    }
+
+    async fn preferred_dns_server(&self, query: DNSQuery) -> Result<()> {
+        let (_, index) = self.get_answer_from_fast_server(&query).await?;
         *self.fast_server.lock().unwrap() = self.servers[index].clone();
         Ok(())
     }
@@ -150,9 +204,13 @@ pub fn setup_answer_accept_task() {
 }
 
 pub fn setup_choose_fast_server_task() {
+    if context().server_choose_strategy != 0 {
+        return;
+    }
     //创建定时任务去定时的优选上游dns servers,半天触发一次
     tokio::spawn(async move {
-        let mut interval = interval(Duration::from_secs(43200));
+        let duration_secs = context().server_choose_duration_h * 60 * 60;
+        let mut interval = interval(Duration::from_secs(duration_secs as u64));
         loop {
             interval.tick().await;
             let test_query = DNSQuery::from_domain("www.baidu.com");
@@ -212,8 +270,8 @@ struct LegalChecker;
 impl Handler for LegalChecker {
     async fn handle(&self, clain: &mut Clain, query: &DNSQuery) -> Result<DNSAnswer> {
         if !query.is_supported() {
-            debug!("The dns query is not supported , will not mit the cache and pre choose!");
-            let answer = context().fast_query(query).await?;
+            debug!("The dns query is not supported , will not mit the cache!");
+            let answer = context().send_query(query).await?;
             debug!("dns answer: {:?}", answer);
             return Ok(answer);
         } else {
@@ -257,7 +315,7 @@ struct QuerySender;
 #[async_trait]
 impl Handler for QuerySender {
     async fn handle(&self, _: &mut Clain, query: &DNSQuery) -> Result<DNSAnswer> {
-        context().fast_query(query).await
+        context().send_query(query).await
     }
 }
 

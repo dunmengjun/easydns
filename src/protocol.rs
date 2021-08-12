@@ -290,6 +290,21 @@ impl From<PacketBuffer> for DNSAnswer {
 }
 
 impl DNSAnswer {
+    pub fn from_query(query: &DNSQuery) -> Self {
+        DNSAnswer {
+            header: Header {
+                id: query.header.id,
+                flags: 0x8180,
+                question_count: query.header.question_count,
+                answer_count: 0,
+                authority_count: 0,
+                additional_count: 0,
+            },
+            questions: query.questions.clone(),
+            answers: vec![],
+            authorities: vec![],
+        }
+    }
     pub fn from_cache(id: u16, record: &DNSCacheRecord) -> Self {
         let mut questions = Vec::new();
         let mut answers = Vec::new();
@@ -423,5 +438,23 @@ impl DNSAnswer {
             r.name = domain_name.clone();
         });
         self.header.answer_count = 1;
+    }
+
+    pub fn combine(&mut self, mut answer: DNSAnswer) {
+        while let Some(mut r) = answer.answers.pop() {
+            if r.is_a_record() {
+                let flag = self.answers.iter().find(|e| {
+                    e.data != r.data
+                }).is_none();
+                if flag {
+                    r.name = self.questions[0].name.clone();
+                    self.answers.push(r);
+                }
+            }
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.answers.is_empty()
     }
 }

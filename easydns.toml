@@ -15,7 +15,7 @@ server-choose-strategy = 0
 
 # server-choose-strategy=0 时此项生效, 代表定时优选的时间间隔
 # 单位是小时
-server-choose-durtion-h = 12
+server-choose-duration-h = 12
 
 # 缓存设置为false，并且ip优选策略是1 会严重影响性能，因为会走两个串行的请求，一个是要从server获取返回的ip,二是要ping返回的ip
 # 这两个请求是不能并行的，所以推荐把缓存开着
