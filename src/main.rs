@@ -9,8 +9,9 @@ mod protocol;
 mod system;
 
 use crate::handler::*;
-use crate::system::{setup_exit_process_task, Result};
+use crate::system::{Result};
 use simple_logger::SimpleLogger;
+use std::sync::Arc;
 
 #[macro_use]
 extern crate log;
@@ -23,20 +24,18 @@ async fn main() -> Result<()> {
 
     let config = config::init_from_toml().await?;
     system::setup_log_level(&config)?;
-    handler::init_context(&config).await?;
-    cache::init_context(&config).await?;
-    filter::init_context(&config).await?;
-    drop(config);
+    let handler = Arc::new(HandlerContext::from(config).await?);
 
-    setup_exit_process_task();
-    setup_answer_accept_task();
-    setup_choose_fast_server_task();
+    setup_exit_process_task(&handler);
+    setup_answer_accept_task(&handler);
+    setup_choose_fast_server_task(&handler);
 
     //从客户端接受请求的主循环
     loop {
-        let (buffer, src) = recv_query().await?;
+        let (buffer, src) = handler.recv_query().await?;
+        let arc_handler = handler.clone();
         tokio::spawn(async move {
-            match handle_task(src, buffer).await {
+            match arc_handler.handle_task(src, buffer).await {
                 Ok(_) => {}
                 Err(e) => error!("error occur here main{:?}", e),
             }

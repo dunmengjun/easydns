@@ -6,7 +6,6 @@ use dashmap::mapref::one::{Ref};
 use tokio::fs::File;
 use tokio::io::{AsyncWriteExt, AsyncReadExt};
 use crate::config::Config;
-use tokio::sync::{OnceCell};
 
 const F_DELIMITER: u8 = '|' as u8;
 const F_SPACE: u8 = ' ' as u8;
@@ -172,7 +171,7 @@ impl DNSCacheManager {
     }
 }
 
-struct CacheContext {
+pub struct CachePool {
     cache_on: bool,
     manager: DNSCacheManager,
     cache_get_strategy: usize,
@@ -180,9 +179,9 @@ struct CacheContext {
     cache_file: String,
 }
 
-impl CacheContext {
+impl CachePool {
     fn new(config: &Config) -> Self {
-        CacheContext {
+        CachePool {
             cache_on: false,
             manager: DNSCacheManager::from(config.cache_num),
             cache_get_strategy: config.cache_get_strategy,
@@ -190,9 +189,9 @@ impl CacheContext {
             cache_file: config.cache_file.clone(),
         }
     }
-    async fn from(config: &Config) -> Self {
+    pub async fn from(config: &Config) -> Self {
         if !config.cache_on {
-            return CacheContext::new(config);
+            return CachePool::new(config);
         }
         let manager = match File::open(&config.cache_file).await {
             Ok(mut file) => {
@@ -208,7 +207,7 @@ impl CacheContext {
                 DNSCacheManager::from(config.cache_num)
             }
         };
-        CacheContext {
+        CachePool {
             cache_on: config.cache_on,
             manager,
             cache_get_strategy: config.cache_get_strategy,
@@ -216,72 +215,57 @@ impl CacheContext {
             cache_file: config.cache_file.clone(),
         }
     }
-}
 
-static CACHE_CONTEXT: OnceCell<CacheContext> = OnceCell::const_new();
-
-pub async fn init_context(config: &Config) -> Result<()> {
-    let context = CacheContext::from(config).await;
-    match CACHE_CONTEXT.set(context) {
-        Ok(_) => {}
-        Err(e) => {
-            panic!("{}", e);
+    fn is_should_removed(&self) -> impl FnOnce(&DNSCacheRecord) -> bool + '_ {
+        move |r: &DNSCacheRecord| {
+            if self.cache_get_strategy == 1 {
+                r.is_expired() && r.get_pass_time() > r.get_ttl() + self.cache_ttl_timeout_ms as u128
+            } else {
+                r.is_expired()
+            }
         }
     }
-    Ok(())
-}
 
-fn context() -> &'static CacheContext {
-    &CACHE_CONTEXT.get().unwrap()
-}
+    pub fn get_answer<F>(&self, query: &DNSQuery, async_func: F) -> Option<DNSAnswer> where F: FnOnce() {
+        if !self.cache_on {
+            return None;
+        }
+        self.manager.get_or_remove(query.get_domain(), self.is_should_removed())
+            .map(|r| {
+                if self.cache_get_strategy == 1 && r.is_expired() {
+                    async_func()
+                }
+                DNSAnswer::from_cache(query.get_id().clone(), r.value())
+            })
+    }
 
-fn is_should_removed(r: &DNSCacheRecord) -> bool {
-    if context().cache_get_strategy == 1 {
-        r.is_expired() && r.get_pass_time() > r.get_ttl() + context().cache_ttl_timeout_ms as u128
-    } else {
-        r.is_expired()
+    pub fn store_answer(&self, answer: &DNSAnswer) {
+        if !self.cache_on {
+            return;
+        }
+        self.manager.store(answer.to_cache())
     }
-}
 
-pub fn get_answer<F>(query: &DNSQuery, async_func: F) -> Option<DNSAnswer> where F: FnOnce(DNSQuery) {
-    if !context().cache_on {
-        return None;
+    pub async fn exit_process_action(&self) -> Result<()> {
+        if !self.cache_on {
+            info!("缓存已禁用");
+            return Ok(());
+        }
+        if self.manager.records.is_empty() {
+            info!("没有缓存需要写入文件");
+            return Ok(());
+        }
+        let mut file = File::create(&self.cache_file).await?;
+        file.write_all(self.manager.to_file_bytes().as_slice()).await?;
+        info!("缓存全部写入了文件! 文件名称是cache");
+        Ok(())
     }
-    context().manager.get_or_remove(query.get_domain(), is_should_removed)
-        .map(|r| {
-            if context().cache_get_strategy == 1 && r.is_expired() {
-                async_func(query.clone())
-            }
-            DNSAnswer::from_cache(query.get_id().clone(), r.value())
-        })
-}
-
-pub fn store_answer(answer: &DNSAnswer) {
-    if !context().cache_on {
-        return;
-    }
-    context().manager.store(answer.to_cache())
-}
-
-pub async fn run_abort_action() -> Result<()> {
-    if !context().cache_on {
-        info!("缓存已禁用");
-        return Ok(());
-    }
-    if context().manager.records.is_empty() {
-        info!("没有缓存需要写入文件");
-        return Ok(());
-    }
-    let mut file = File::create(&context().cache_file).await?;
-    file.write_all(context().manager.to_file_bytes().as_slice()).await?;
-    info!("缓存全部写入了文件! 文件名称是cache");
-    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::cache::{get_answer, init_context, context, DNSCacheRecord, store_answer, CACHE_CONTEXT, CacheContext};
-    use crate::protocol::{DNSQuery, DNSAnswer};
+    use crate::cache::{DNSCacheRecord, CachePool};
+    use crate::protocol::{DNSQuery};
     use crate::config::Config;
     use crate::system::Result;
     use crate::protocol::tests::build_simple_answer;
@@ -289,12 +273,12 @@ mod tests {
 
     #[tokio::test]
     async fn should_return_none_when_get_answer_given_cache_on_is_false() -> Result<()> {
-        init_cache_context(|config| {
+        let cache_pool = init_cache_pool(|config| {
             config.cache_on = false;
-        }).await?;
+        }).await;
         let query = DNSQuery::from_domain("www.baidu.com");
 
-        let result = get_answer(&query, |_query| assert!(false));
+        let result = cache_pool.get_answer(&query, || assert!(false));
 
         assert!(result.is_none());
         Ok(())
@@ -302,13 +286,13 @@ mod tests {
 
     #[tokio::test]
     async fn should_return_answer_when_get_answer_given_cache_is_enable_and_has_cache() -> Result<()> {
-        init_cache_context(|config| {
+        let cache_pool = init_cache_pool(|config| {
             config.cache_on = true;
             config.cache_get_strategy = 0;
-        }).await?;
-        let query = init_context_data(|r| {});
+        }).await;
+        let query = init_data(&cache_pool, |_r| {});
 
-        let result = get_answer(&query, |_query| assert!(false));
+        let result = cache_pool.get_answer(&query, || assert!(false));
 
         let expected = build_simple_answer(&query, vec![1, 1, 1, 1], 1);
         assert_eq!(Some(expected), result);
@@ -317,18 +301,18 @@ mod tests {
 
     #[tokio::test]
     async fn should_return_none_when_get_answer_given_record_is_expired() -> Result<()> {
-        init_cache_context(|config| {
+        let cache_pool = init_cache_pool(|config| {
             config.cache_on = true;
             config.cache_get_strategy = 0;
-        }).await?;
-        let query = init_context_data(|record| {
+        }).await;
+        let query = init_data(&cache_pool, |record| {
             record.ttl = 1000;
             record.pass_time = 1001;
         });
 
-        let result = get_answer(&query, |_query| assert!(false));
+        let result = cache_pool.get_answer(&query, || assert!(false));
 
-        assert!(context().manager.records.is_empty());
+        assert!(cache_pool.manager.records.is_empty());
         assert_eq!(None, result);
         Ok(())
     }
@@ -336,18 +320,18 @@ mod tests {
     #[tokio::test]
     async fn should_return_answer_and_call_async_method_when_get_answer_given_cache_strategy_is_1_and_record_is_in_timeout()
         -> Result<()> {
-        init_cache_context(|config| {
+        let cache_pool = init_cache_pool(|config| {
             config.cache_on = true;
             config.cache_get_strategy = 1;
             config.cache_ttl_timeout_ms = 1000;
-        }).await?;
-        let query = init_context_data(|record| {
+        }).await;
+        let query = init_data(&cache_pool, |record| {
             record.ttl = 1000;
             record.pass_time = 1001;
         });
         let mut async_call = false;
 
-        let result = get_answer(&query, |_query| { async_call = true; });
+        let result = cache_pool.get_answer(&query, || { async_call = true; });
 
         let expected = build_simple_answer(&query, vec![1, 1, 1, 1], 0);
         assert!(async_call);
@@ -358,66 +342,65 @@ mod tests {
     #[tokio::test]
     async fn should_return_none_when_get_answer_given_cache_strategy_is_1_and_record_is_over_timeout()
         -> Result<()> {
-        init_cache_context(|config| {
+        let cache_pool = init_cache_pool(|config| {
             config.cache_on = true;
             config.cache_get_strategy = 1;
             config.cache_ttl_timeout_ms = 1000;
-        }).await?;
-        let query = init_context_data(|record| {
+        }).await;
+        let query = init_data(&cache_pool, |record| {
             record.ttl = 1000;
             record.pass_time = 2001;
         });
 
-        let result = get_answer(&query, |_query| assert!(false));
+        let result = cache_pool.get_answer(&query, || assert!(false));
 
-        assert!(context().manager.records.is_empty());
+        assert!(cache_pool.manager.records.is_empty());
         assert_eq!(None, result);
         Ok(())
     }
 
     #[tokio::test]
     async fn should_no_record_in_context_when_store_answer_given_cache_on_is_false() -> Result<()> {
-        init_cache_context(|config| {
+        let cache_pool = init_cache_pool(|config| {
             config.cache_on = false;
-        }).await?;
+        }).await;
         let query = DNSQuery::from_domain("www.baidu.com");
         let answer = build_simple_answer(&query, vec![1, 1, 1, 1], 1);
 
-        store_answer(&answer);
+        cache_pool.store_answer(&answer);
 
-        assert!(context().manager.records.is_empty());
+        assert!(cache_pool.manager.records.is_empty());
         Ok(())
     }
 
     #[tokio::test]
     async fn should_store_record_in_context_when_store_answer_given_cache_on_is_true() -> Result<()> {
-        init_cache_context(|config| {
+        let cache_pool = init_cache_pool(|config| {
             config.cache_on = true;
-        }).await?;
+        }).await;
         let query = DNSQuery::from_domain("www.baidu.com");
         let answer = build_simple_answer(&query, vec![1, 1, 1, 1], 1);
 
-        store_answer(&answer);
+        cache_pool.store_answer(&answer);
 
-        assert_eq!(1, context().manager.records.len());
+        assert_eq!(1, cache_pool.manager.records.len());
         let expected = init_record(query.get_domain().clone());
-        let result = context().manager.records.get(query.get_domain()).unwrap().eq(&expected);
+        let result = cache_pool.manager.records.get(query.get_domain()).unwrap().eq(&expected);
         assert!(result);
         Ok(())
     }
 
-    async fn init_cache_context(f: impl Fn(&mut Config)) -> Result<()> {
+    async fn init_cache_pool(f: impl Fn(&mut Config)) -> CachePool {
         let mut config = init_test_config();
         f(&mut config);
-        init_context(&config).await?;
-        Ok(())
+        CachePool::from(&config).await
     }
 
-    fn init_context_data(f: impl Fn(&mut DNSCacheRecord)) -> DNSQuery {
+    fn init_data(cache_pool: &CachePool, f: impl Fn(&mut DNSCacheRecord)) -> DNSQuery {
         let query = DNSQuery::from_domain("www.baidu.com");
         let mut record = init_record(query.get_domain().clone());
         f(&mut record);
-        context().manager.records.insert(record.domain.clone(), record.clone());
+        cache_pool.manager.records.insert(record.domain.clone(), record.clone());
         query
     }
 

@@ -2,24 +2,24 @@ use crate::buffer::PacketBuffer;
 use crate::config::Config;
 use crate::protocol::{DNSAnswer, DNSQuery};
 use crate::system::{next_id, Result};
-use crate::{cache, filter};
 use async_trait::async_trait;
 use dashmap::DashMap;
 use futures_util::future::select_all;
 use futures_util::FutureExt;
 use std::net::SocketAddr;
-use std::sync::Mutex;
+use std::sync::{Mutex, Arc};
 use tokio::net::UdpSocket;
 use tokio::sync::oneshot::Sender;
-use tokio::sync::{oneshot, OnceCell};
+use tokio::sync::{oneshot};
 use tokio::time::interval;
 use tokio::time::Duration;
 use tokio_icmp::Pinger;
+use crate::cache::CachePool;
+use crate::filter::Filter;
 
-pub struct HandlerContext {
-    server_socket: UdpSocket,
-    main_socket: UdpSocket,
-    pinger: Option<Pinger>,
+
+struct ServerGroup {
+    socket: UdpSocket,
     reg_table: DashMap<u16, Sender<DNSAnswer>>,
     servers: Vec<String>,
     fast_server: Mutex<String>,
@@ -27,35 +27,41 @@ pub struct HandlerContext {
     server_choose_duration_h: usize,
 }
 
-impl HandlerContext {
-    pub async fn from(config: &Config) -> Result<Self> {
-        let pinger = if config.ip_choose_strategy == 0 {
-            None
-        } else {
-            Some(tokio_icmp::Pinger::new().await?)
-        };
-        let server_socket = UdpSocket::bind(("0.0.0.0", config.port)).await?;
-        let upstream_socket = UdpSocket::bind("0.0.0.0:0").await?;
-        let answer_reg_table = DashMap::new();
-        let upstream_dns_servers = config.servers.clone();
-        let fast_dns_server = Mutex::new(upstream_dns_servers[0].clone());
-        Ok(HandlerContext {
-            server_socket: upstream_socket,
-            main_socket: server_socket,
-            pinger,
-            reg_table: answer_reg_table,
-            servers: upstream_dns_servers,
-            fast_server: fast_dns_server,
+impl ServerGroup {
+    async fn from(config: &Config) -> Result<Self> {
+        let socket = UdpSocket::bind("0.0.0.0:0").await?;
+        let reg_table = DashMap::new();
+        let servers = config.servers.clone();
+        let fast_server = Mutex::new(servers[0].clone());
+        Ok(ServerGroup {
+            socket,
+            reg_table,
+            servers,
+            fast_server,
             server_choose_strategy: config.server_choose_strategy,
             server_choose_duration_h: config.server_choose_duration_h,
         })
+    }
+    async fn recv(&self) -> Result<()> {
+        let mut buffer = PacketBuffer::new();
+        self.socket.recv_from(buffer.as_mut_slice()).await?;
+        let answer = DNSAnswer::from(buffer);
+        match self.reg_table.remove(answer.get_id()) {
+            None => {}
+            Some((_, sender)) => {
+                if let Err(e) = sender.send(answer) {
+                    self.reg_table.remove(e.get_id());
+                }
+            }
+        }
+        Ok(())
     }
 
     async fn exec_query(&self, address: &str, query: &DNSQuery) -> Result<DNSAnswer> {
         let (sender, receiver) = oneshot::channel();
         let next_id = next_id();
         self.reg_table.insert(next_id, sender);
-        self.server_socket
+        self.socket
             .send_to(query.to_u8_with_id(next_id).as_slice(), address)
             .await?;
         let mut answer = receiver.await?;
@@ -98,7 +104,7 @@ impl HandlerContext {
     }
 
     async fn send_query(&self, query: &DNSQuery) -> Result<DNSAnswer> {
-        match context().server_choose_strategy {
+        match self.server_choose_strategy {
             0 => {
                 self.fast_query(query).await
             }
@@ -130,6 +136,35 @@ impl HandlerContext {
         *self.fast_server.lock().unwrap() = self.servers[index].clone();
         Ok(())
     }
+}
+
+pub struct HandlerContext {
+    server_group: Arc<ServerGroup>,
+    main_socket: UdpSocket,
+    pinger: Arc<Option<Pinger>>,
+    cache_pool: Arc<CachePool>,
+    filter: Arc<Filter>,
+}
+
+impl HandlerContext {
+    pub async fn from(config: Config) -> Result<Self> {
+        let pinger = if config.ip_choose_strategy == 0 {
+            None
+        } else {
+            Some(tokio_icmp::Pinger::new().await?)
+        };
+        let main_socket = UdpSocket::bind(("0.0.0.0", config.port)).await?;
+        let server_group = Arc::new(ServerGroup::from(&config).await?);
+        let cache_pool = Arc::new(CachePool::from(&config).await);
+        let filter = Arc::new(Filter::from(&config).await);
+        Ok(HandlerContext {
+            server_group,
+            main_socket,
+            pinger: Arc::new(pinger),
+            cache_pool,
+            filter,
+        })
+    }
 
     async fn back_to_client(&self, client: SocketAddr, answer: DNSAnswer) -> Result<()> {
         self.main_socket
@@ -138,64 +173,48 @@ impl HandlerContext {
         Ok(())
     }
 
-    async fn recv_and_handle_answer(&self) -> Result<()> {
+    pub async fn recv_query(&self) -> Result<(PacketBuffer, SocketAddr)> {
         let mut buffer = PacketBuffer::new();
-        self.server_socket.recv_from(buffer.as_mut_slice()).await?;
-        let answer = DNSAnswer::from(buffer);
-        match self.reg_table.remove(answer.get_id()) {
-            None => {}
-            Some((_, sender)) => {
-                if let Err(e) = sender.send(answer) {
-                    self.reg_table.remove(e.get_id());
-                }
-            }
-        }
-        Ok(())
+        let (_, src) = self
+            .main_socket
+            .recv_from(buffer.as_mut_slice())
+            .await?;
+        Ok((buffer, src))
+    }
+
+    pub async fn handle_task(&self, src: SocketAddr, buffer: PacketBuffer) -> Result<()> {
+        let mut query_clain = Clain::new();
+        query_clain.add(DomainFilter::new(self.filter.clone()));
+        query_clain.add(LegalChecker::new(self.server_group.clone()));
+        query_clain.add(CacheHandler::new(self.cache_pool.clone()));
+        query_clain.add(IpChoiceMaker::new(self.pinger.clone()));
+        query_clain.add(QuerySender::new(self.server_group.clone()));
+        let answer = query_clain.next(DNSQuery::from(buffer)).await?;
+        self.back_to_client(src, answer).await
     }
 }
 
-pub async fn recv_query() -> Result<(PacketBuffer, SocketAddr)> {
-    let mut buffer = PacketBuffer::new();
-    let (_, src) = context()
-        .main_socket
-        .recv_from(buffer.as_mut_slice())
-        .await?;
-    Ok((buffer, src))
+#[derive(Clone)]
+struct ClainContext {
+    query: DNSQuery,
 }
 
-pub async fn handle_task(src: SocketAddr, buffer: PacketBuffer) -> Result<()> {
-    let mut query_clain = Clain::new();
-    query_clain.add(DomainFilter);
-    query_clain.add(LegalChecker);
-    query_clain.add(CacheHandler);
-    query_clain.add(IpChoiceMaker);
-    query_clain.add(QuerySender);
-    let answer = query_clain.next(&DNSQuery::from(buffer)).await?;
-    context().back_to_client(src, answer).await
+pub fn setup_exit_process_task(context: &HandlerContext) {
+    //创建任务去监听ctrl_c event
+    let cloned_cache_pool = context.cache_pool.clone();
+    tokio::spawn(async move {
+        tokio::signal::ctrl_c().await.expect("failed to listen for ctrl_c event");
+        cloned_cache_pool.exit_process_action().await.unwrap();
+        std::process::exit(0);
+    });
 }
 
-static HANDLER_CONTEXT: OnceCell<HandlerContext> = OnceCell::const_new();
-
-pub async fn init_context(config: &Config) -> Result<()> {
-    let context = HandlerContext::from(config).await?;
-    match HANDLER_CONTEXT.set(context) {
-        Ok(_) => {}
-        Err(e) => {
-            panic!("{}", e);
-        }
-    }
-    Ok(())
-}
-
-pub fn context() -> &'static HandlerContext {
-    HANDLER_CONTEXT.get().unwrap()
-}
-
-pub fn setup_answer_accept_task() {
+pub fn setup_answer_accept_task(context: &HandlerContext) {
     //创建任务去recv从上游dns服务器返回的answer
+    let cloned_server_group = context.server_group.clone();
     tokio::spawn(async move {
         loop {
-            match context().recv_and_handle_answer().await {
+            match cloned_server_group.recv().await {
                 Ok(()) => {}
                 Err(e) => error!("error occur here accept {:?}", e),
             }
@@ -203,18 +222,19 @@ pub fn setup_answer_accept_task() {
     });
 }
 
-pub fn setup_choose_fast_server_task() {
-    if context().server_choose_strategy != 0 {
+pub fn setup_choose_fast_server_task(context: &HandlerContext) {
+    let server_group = context.server_group.clone();
+    if server_group.server_choose_strategy != 0 {
         return;
     }
     //创建定时任务去定时的优选上游dns servers,半天触发一次
+    let duration_secs = server_group.server_choose_duration_h * 60 * 60;
     tokio::spawn(async move {
-        let duration_secs = context().server_choose_duration_h * 60 * 60;
         let mut interval = interval(Duration::from_secs(duration_secs as u64));
         loop {
             interval.tick().await;
             let test_query = DNSQuery::from_domain("www.baidu.com");
-            if let Err(e) = context().preferred_dns_server(test_query).await {
+            if let Err(e) = server_group.preferred_dns_server(test_query).await {
                 error!("interval task upstream servers choose has error: {:?}", e)
             }
         }
@@ -234,7 +254,7 @@ impl Clain {
         self.funcs.push(Box::new(handler));
     }
 
-    async fn next(&mut self, query: &DNSQuery) -> Result<DNSAnswer> {
+    async fn next(&mut self, query: DNSQuery) -> Result<DNSAnswer> {
         self.funcs.remove(0).handle(self, query).await
     }
 
@@ -249,7 +269,7 @@ impl Clain {
 
 #[async_trait]
 trait Handler: Send + Sync + HandlerCloner {
-    async fn handle(&self, clain: &mut Clain, query: &DNSQuery) -> Result<DNSAnswer>;
+    async fn handle(&self, clain: &mut Clain, query: DNSQuery) -> Result<DNSAnswer>;
 }
 
 trait HandlerCloner {
@@ -264,14 +284,24 @@ impl<T> HandlerCloner for T where T: 'static + Clone + Handler {
 
 
 #[derive(Clone)]
-struct LegalChecker;
+struct LegalChecker {
+    server_group: Arc<ServerGroup>,
+}
+
+impl LegalChecker {
+    fn new(server_group: Arc<ServerGroup>) -> Self {
+        LegalChecker {
+            server_group
+        }
+    }
+}
 
 #[async_trait]
 impl Handler for LegalChecker {
-    async fn handle(&self, clain: &mut Clain, query: &DNSQuery) -> Result<DNSAnswer> {
+    async fn handle(&self, clain: &mut Clain, query: DNSQuery) -> Result<DNSAnswer> {
         if !query.is_supported() {
             debug!("The dns query is not supported , will not mit the cache!");
-            let answer = context().send_query(query).await?;
+            let answer = self.server_group.send_query(&query).await?;
             debug!("dns answer: {:?}", answer);
             return Ok(answer);
         } else {
@@ -281,17 +311,29 @@ impl Handler for LegalChecker {
 }
 
 #[derive(Clone)]
-struct CacheHandler;
+struct CacheHandler {
+    cache_pool: Arc<CachePool>,
+}
+
+impl CacheHandler {
+    fn new(cache_pool: Arc<CachePool>) -> Self {
+        CacheHandler {
+            cache_pool
+        }
+    }
+}
 
 #[async_trait]
 impl Handler for CacheHandler {
-    async fn handle(&self, clain: &mut Clain, query: &DNSQuery) -> Result<DNSAnswer> {
-        let async_func = |query: DNSQuery| {
-            let mut temp_chain = clain.clone();
+    async fn handle(&self, clain: &mut Clain, query: DNSQuery) -> Result<DNSAnswer> {
+        let mut temp_chain = clain.clone();
+        let cloned_query = query.clone();
+        let cloned_cache_pool = self.cache_pool.clone();
+        let async_func = move || {
             tokio::spawn(async move {
-                match temp_chain.next(&query).await {
+                match temp_chain.next(cloned_query).await {
                     Ok(answer) => {
-                        cache::store_answer(&answer);
+                        cloned_cache_pool.store_answer(&answer);
                     }
                     Err(e) => {
                         error!("async get answer from server error: {:?}", e)
@@ -299,35 +341,55 @@ impl Handler for CacheHandler {
                 }
             });
         };
-        if let Some(answer) = cache::get_answer(query, async_func) {
+        if let Some(answer) = self.cache_pool.get_answer(&query, async_func) {
             return Ok(answer);
         } else {
             let result = clain.next(query).await?;
-            cache::store_answer(&result);
+            self.cache_pool.store_answer(&result);
             Ok(result)
         }
     }
 }
 
 #[derive(Clone)]
-struct QuerySender;
+struct QuerySender {
+    server_group: Arc<ServerGroup>,
+}
+
+impl QuerySender {
+    fn new(server_group: Arc<ServerGroup>) -> Self {
+        QuerySender {
+            server_group
+        }
+    }
+}
 
 #[async_trait]
 impl Handler for QuerySender {
-    async fn handle(&self, _: &mut Clain, query: &DNSQuery) -> Result<DNSAnswer> {
-        context().send_query(query).await
+    async fn handle(&self, _: &mut Clain, query: DNSQuery) -> Result<DNSAnswer> {
+        self.server_group.send_query(&query).await
     }
 }
 
 #[derive(Clone)]
-struct IpChoiceMaker;
+struct IpChoiceMaker {
+    pinger: Arc<Option<Pinger>>,
+}
+
+impl IpChoiceMaker {
+    fn new(pinger: Arc<Option<Pinger>>) -> Self {
+        IpChoiceMaker {
+            pinger
+        }
+    }
+}
 
 #[async_trait]
 impl Handler for IpChoiceMaker {
-    async fn handle(&self, clain: &mut Clain, query: &DNSQuery) -> Result<DNSAnswer> {
+    async fn handle(&self, clain: &mut Clain, query: DNSQuery) -> Result<DNSAnswer> {
         let mut answer = clain.next(query).await?;
         let ip_vec = answer.get_ip_vec();
-        if let Some(pinger) = &context().pinger {
+        if let Some(pinger) = self.pinger.as_ref() {
             if ip_vec.len() == 1 {
                 answer.retain_ip(ip_vec[0]);
                 return Ok(answer);
@@ -347,15 +409,25 @@ impl Handler for IpChoiceMaker {
 }
 
 #[derive(Clone)]
-struct DomainFilter;
+struct DomainFilter {
+    filter: Arc<Filter>,
+}
+
+impl DomainFilter {
+    fn new(filter: Arc<Filter>) -> Self {
+        DomainFilter {
+            filter
+        }
+    }
+}
 
 #[async_trait]
 impl Handler for DomainFilter {
-    async fn handle(&self, clain: &mut Clain, query: &DNSQuery) -> Result<DNSAnswer> {
+    async fn handle(&self, clain: &mut Clain, query: DNSQuery) -> Result<DNSAnswer> {
         let domain = query.get_readable_domain();
-        if filter::contain(domain) {
+        if self.filter.contain(domain) {
             //返回soa
-            return Ok(DNSAnswer::from_query_with_soa(query));
+            return Ok(DNSAnswer::from_query_with_soa(&query));
         }
         clain.next(query).await
     }

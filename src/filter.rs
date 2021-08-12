@@ -6,38 +6,53 @@ use std::process::Stdio;
 use tokio::fs::File;
 use tokio::io::{AsyncBufRead, AsyncBufReadExt, BufReader};
 use tokio::process::Command;
-use tokio::sync::OnceCell;
 
 const GET_DOMAIN_REGEX: &str =
     "address /([a-zA-Z0-9][-a-zA-Z0-9]{0,62}(?:\\.[a-zA-Z0-9][-a-zA-Z0-9]{0,62})+)/([#|d])";
 
-struct FilterContext {
+#[derive(PartialEq, Eq, Hash, Debug)]
+struct FilterItem {
+    domain: String,
+    group: String,
+}
+
+impl From<String> for FilterItem {
+    fn from(domain: String) -> Self {
+        FilterItem {
+            domain,
+            group: "#".into(),
+        }
+    }
+}
+
+pub struct Filter {
     set: HashSet<FilterItem>,
 }
 
-impl FilterContext {
-    async fn from(config: &Config) -> Self {
+impl Filter {
+    pub async fn from(config: &Config) -> Self {
         let set = read_resources_to_filter(&config.filters).await;
         debug!("filter init done, set len = {}", set.len());
-        FilterContext { set }
+        Filter { set }
     }
-}
 
-static FILTER_CONTEXT: OnceCell<FilterContext> = OnceCell::const_new();
-
-pub async fn init_context(config: &Config) -> Result<()> {
-    let context = FilterContext::from(config).await;
-    match FILTER_CONTEXT.set(context) {
-        Ok(_) => {}
-        Err(e) => {
-            panic!("{}", e);
+    pub fn contain(&self, domain: String) -> bool {
+        //拆分多级域名
+        let split = domain.split(".");
+        let vec: Vec<&str> = split.collect();
+        for i in (0..vec.len()).rev() {
+            let mut string = String::new();
+            for j in i..vec.len() {
+                string.push_str(vec[j]);
+                string.push_str(".");
+            }
+            string.remove(string.len() - 1);
+            if self.set.contains(&string.into()) {
+                return true;
+            }
         }
+        false
     }
-    Ok(())
-}
-
-fn filter_set() -> &'static HashSet<FilterItem> {
-    &FILTER_CONTEXT.get().unwrap().set
 }
 
 async fn read_resources_to_filter(paths: &Vec<String>) -> HashSet<FilterItem> {
@@ -117,21 +132,6 @@ async fn read_to_filter(
     Ok(set)
 }
 
-#[derive(PartialEq, Eq, Hash, Debug)]
-struct FilterItem {
-    domain: String,
-    group: String,
-}
-
-impl From<String> for FilterItem {
-    fn from(domain: String) -> Self {
-        FilterItem {
-            domain,
-            group: "#".into(),
-        }
-    }
-}
-
 fn handle_one_line(regex: &Regex, line: &String) -> Option<FilterItem> {
     if line.starts_with("#") {
         return None;
@@ -148,24 +148,6 @@ fn handle_one_line(regex: &Regex, line: &String) -> Option<FilterItem> {
             }
             None => None,
         })
-}
-
-pub fn contain(domain: String) -> bool {
-    //拆分多级域名
-    let split = domain.split(".");
-    let vec: Vec<&str> = split.collect();
-    for i in (0..vec.len()).rev() {
-        let mut string = String::new();
-        for j in i..vec.len() {
-            string.push_str(vec[j]);
-            string.push_str(".");
-        }
-        string.remove(string.len() - 1);
-        if filter_set().contains(&string.into()) {
-            return true;
-        }
-    }
-    false
 }
 
 #[cfg(test)]
