@@ -228,7 +228,7 @@ struct CacheHandler;
 #[async_trait]
 impl Handler for CacheHandler {
     async fn handle(&self, clain: &mut Clain, query: &DNSQuery) -> Result<DNSAnswer> {
-        let async_get_data_func = |query: DNSQuery| {
+        let async_func = |query: DNSQuery| {
             let mut temp_chain = clain.clone();
             tokio::spawn(async move {
                 match temp_chain.next(&query).await {
@@ -241,7 +241,7 @@ impl Handler for CacheHandler {
                 }
             });
         };
-        if let Some(answer) = cache::get_answer(query, async_get_data_func) {
+        if let Some(answer) = cache::get_answer(query, async_func) {
             return Ok(answer);
         } else {
             let result = clain.next(query).await?;

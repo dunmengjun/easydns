@@ -41,16 +41,8 @@ impl DNSCacheRecord {
         self.pass_time > self.ttl
     }
 
-    fn is_expired_and_timeout(&self, timeout: usize) -> bool {
-        if context().cache_get_strategy == 0 {
-            self.is_expired()
-        } else {
-            self.pass_time > self.ttl + timeout as u128
-        }
-    }
-
-    fn is_in_timeout(&self) -> bool {
-        self.pass_time > self.ttl
+    fn get_pass_time(&self) -> u128 {
+        self.pass_time
     }
 
     pub fn get_domain(&self) -> &Vec<u8> {
@@ -66,6 +58,10 @@ impl DNSCacheRecord {
         } else {
             (self.ttl - self.pass_time) / 1000
         }
+    }
+
+    pub fn get_ttl(&self) -> u128 {
+        self.ttl
     }
     pub fn pass_time(&mut self) {
         let current_time = get_timestamp();
@@ -121,7 +117,7 @@ impl DNSCacheRecord {
 impl DNSCacheManager {
     fn from(limit_len: usize) -> Self {
         DNSCacheManager {
-            records: Default::default(),
+            records: DashMap::with_capacity(limit_len),
             limit_len,
         }
     }
@@ -139,9 +135,10 @@ impl DNSCacheManager {
         }
         self.records.insert(record.domain.clone(), record);
     }
-    fn get(&self, domain: &Vec<u8>) -> Option<Ref<Vec<u8>, DNSCacheRecord, RandomState>> {
+    fn get_or_remove(&self, domain: &Vec<u8>, remove_if: impl FnOnce(&DNSCacheRecord) -> bool)
+                     -> Option<Ref<Vec<u8>, DNSCacheRecord, RandomState>> {
         self.records.remove_if(domain, |_, v| {
-            v.is_expired_and_timeout(context().cache_ttl_timeout_ms)
+            remove_if(v)
         });
         self.records.get_mut(domain).map(|mut e| {
             e.pass_time();
@@ -159,7 +156,7 @@ impl DNSCacheManager {
 
     fn from_bytes(bytes: &[u8], limit_len: usize) -> Self {
         let split = bytes.split(|e| F_SPACE == *e);
-        let records = DashMap::new();
+        let records = DashMap::with_capacity(limit_len);
         for r_bytes in split {
             let mut record = DNSCacheRecord::from_bytes(r_bytes);
             record.pass_time();
@@ -183,15 +180,18 @@ struct CacheContext {
 }
 
 impl CacheContext {
+    fn new(config: &Config) -> Self {
+        CacheContext {
+            cache_on: false,
+            manager: DNSCacheManager::from(config.cache_num),
+            cache_get_strategy: config.cache_get_strategy,
+            cache_ttl_timeout_ms: config.cache_ttl_timeout_ms,
+            cache_file: config.cache_file.clone(),
+        }
+    }
     async fn from(config: &Config) -> Self {
         if !config.cache_on {
-            return CacheContext {
-                cache_on: false,
-                manager: DNSCacheManager::from(config.cache_num),
-                cache_get_strategy: config.cache_get_strategy,
-                cache_ttl_timeout_ms: config.cache_ttl_timeout_ms,
-                cache_file: config.cache_file.clone(),
-            };
+            return CacheContext::new(config);
         }
         let manager = match File::open(&config.cache_file).await {
             Ok(mut file) => {
@@ -234,14 +234,22 @@ fn context() -> &'static CacheContext {
     &CACHE_CONTEXT.get().unwrap()
 }
 
+fn is_should_removed(r: &DNSCacheRecord) -> bool {
+    if context().cache_get_strategy == 1 {
+        r.is_expired() && r.get_pass_time() > r.get_ttl() + context().cache_ttl_timeout_ms as u128
+    } else {
+        r.is_expired()
+    }
+}
+
 pub fn get_answer<F>(query: &DNSQuery, async_func: F) -> Option<DNSAnswer> where F: Fn(DNSQuery) {
     if !context().cache_on {
         return None;
     }
-    context().manager.get(query.get_domain())
+    context().manager.get_or_remove(query.get_domain(), is_should_removed)
         .map(|r| {
-            if context().cache_get_strategy == 1 && r.is_in_timeout() {
-                async_func(query.clone());
+            if context().cache_get_strategy == 1 && r.is_expired() {
+                async_func(query.clone())
             }
             DNSAnswer::from_cache(query.get_id().clone(), r.value())
         })
