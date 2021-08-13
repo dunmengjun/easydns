@@ -4,6 +4,7 @@ use std::sync::Arc;
 use crate::handler::{Clain, Handler};
 use crate::protocol::{DNSAnswer, DNSQuery};
 use crate::system::Result;
+use tokio::runtime::Handle;
 
 #[derive(Clone)]
 pub struct CacheHandler {
@@ -23,25 +24,16 @@ impl Handler for CacheHandler {
     async fn handle(&self, clain: &mut Clain, query: DNSQuery) -> Result<DNSAnswer> {
         let mut temp_chain = clain.clone();
         let cloned_query = query.clone();
-        let cloned_cache_pool = self.cache_pool.clone();
-        let async_func = move || {
-            tokio::spawn(async move {
-                match temp_chain.next(cloned_query).await {
-                    Ok(answer) => {
-                        cloned_cache_pool.store_answer(&answer);
-                    }
-                    Err(e) => {
-                        error!("async get answer from server error: {:?}", e)
-                    }
-                }
-            });
-        };
-        if let Some(answer) = self.cache_pool.get_answer(&query, async_func) {
-            return Ok(answer);
-        } else {
-            let result = clain.next(query).await?;
-            self.cache_pool.store_answer(&result);
-            Ok(result)
-        }
+        let result = self.cache_pool.get(query.get_domain(), || {
+            tokio::task::block_in_place(move || {
+                Handle::current().block_on(async move {
+                    temp_chain.next(cloned_query).await
+                })
+            })
+        });
+        result.map(|mut r| {
+            r.set_id(query.get_id().clone());
+            r
+        })
     }
 }

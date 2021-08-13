@@ -8,12 +8,12 @@ use crate::handler::*;
 use crate::system::Result;
 
 mod buffer;
-mod cache;
 mod config;
 mod filter;
 mod protocol;
 mod system;
 mod handler;
+mod cache;
 
 #[macro_use]
 extern crate log;

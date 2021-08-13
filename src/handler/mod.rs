@@ -45,7 +45,7 @@ impl HandlerContext {
         };
         let main_socket = UdpSocket::bind(("0.0.0.0", config.port)).await?;
         let server_group = Arc::new(ServerGroup::from(&config).await?);
-        let cache_pool = Arc::new(CachePool::from(&config).await);
+        let cache_pool = Arc::new(CachePool::from(&config).await?);
         let filter = Arc::new(Filter::from(&config).await);
         Ok(HandlerContext {
             server_group,

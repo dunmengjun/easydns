@@ -2,7 +2,7 @@ use std::fmt::{Debug};
 use crate::buffer::PacketBuffer;
 use crate::cache::DNSCacheRecord;
 use std::net::{IpAddr, Ipv4Addr};
-use crate::system::next_id;
+use crate::system::{next_id, TimeNow};
 
 const C_FACTOR: u8 = 192u8;
 const DC_FACTOR: u16 = 16383u16;
@@ -214,7 +214,7 @@ fn wrap_dns_domain(domain: &str) -> Vec<u8> {
     vec
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 struct ResourceRecord {
     name: Vec<u8>,
     _type: u16,
@@ -261,7 +261,7 @@ impl ResourceRecord {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct DNSAnswer {
     header: Header,
     questions: Vec<Question>,
@@ -289,6 +289,39 @@ impl From<PacketBuffer> for DNSAnswer {
     }
 }
 
+impl From<DNSCacheRecord> for DNSAnswer {
+    fn from(record: DNSCacheRecord) -> Self {
+        let mut questions = Vec::new();
+        let mut answers = Vec::new();
+        questions.push(Question {
+            name: record.get_domain().clone(),
+            _type: 1,
+            class: 1,
+        });
+        answers.push(ResourceRecord {
+            name: record.get_domain().clone(),
+            _type: 1,
+            class: 1,
+            ttl: record.get_remain_time(TimeNow::new()) as u32 / 1000,
+            data_len: 4,
+            data: record.get_address().clone(),
+        });
+        DNSAnswer {
+            header: Header {
+                id: 0,
+                flags: 0x8180,
+                question_count: 1,
+                answer_count: 1,
+                authority_count: 0,
+                additional_count: 0,
+            },
+            questions,
+            answers,
+            authorities: vec![],
+        }
+    }
+}
+
 impl DNSAnswer {
     pub fn from_query(query: &DNSQuery) -> Self {
         DNSAnswer {
@@ -302,36 +335,6 @@ impl DNSAnswer {
             },
             questions: query.questions.clone(),
             answers: vec![],
-            authorities: vec![],
-        }
-    }
-    pub fn from_cache(id: u16, record: &DNSCacheRecord) -> Self {
-        let mut questions = Vec::new();
-        let mut answers = Vec::new();
-        questions.push(Question {
-            name: record.get_domain().clone(),
-            _type: 1,
-            class: 1,
-        });
-        answers.push(ResourceRecord {
-            name: record.get_domain().clone(),
-            _type: 1,
-            class: 1,
-            ttl: record.get_ttl_secs().clone() as u32,
-            data_len: 4,
-            data: record.get_address().clone(),
-        });
-        DNSAnswer {
-            header: Header {
-                id,
-                flags: 0x8180,
-                question_count: 1,
-                answer_count: 1,
-                authority_count: 0,
-                additional_count: 0,
-            },
-            questions,
-            answers,
             authorities: vec![],
         }
     }
@@ -385,31 +388,24 @@ impl DNSAnswer {
         vec
     }
 
-    pub fn to_cache(&self) -> DNSCacheRecord {
-        let domain = &self.questions[0].name;
-        if let Some(r) = self.answers.iter()
-            .find(|a| a.name.eq(domain)) {
-            if r._type == 5 {
-                let record = self.answers.iter()
-                    .find(|a| a.name.eq(&r.data))
-                    .expect("错误的dns应答");
-                DNSCacheRecord::from(
-                    domain.clone(), record.data.clone(), record.ttl.clone())
-            } else {
-                DNSCacheRecord::from(
-                    domain.clone(), r.data.clone(), r.ttl.clone())
-            }
-        } else {
-            panic!("错误的dns应答")
-        }
-    }
-
     pub fn get_id(&self) -> &u16 {
         &self.header.id
     }
 
     pub fn set_id(&mut self, id: u16) {
         self.header.id = id;
+    }
+
+    pub fn get_domain(&self) -> &Vec<u8> {
+        &self.questions[0].name
+    }
+
+    pub fn get_ttl_secs(&self) -> u32 {
+        self.answers[0].ttl
+    }
+
+    pub fn get_address(&self) -> &Vec<u8> {
+        &self.answers[0].data
     }
 
     pub fn get_ip_vec(&self) -> Vec<IpAddr> {
@@ -457,12 +453,6 @@ impl DNSAnswer {
 
     pub fn is_empty(&self) -> bool {
         self.answers.is_empty()
-    }
-
-    pub fn set_all_ttl(&mut self, ttl: u32) {
-        self.answers.iter_mut().for_each(|e| {
-            e.ttl = ttl
-        })
     }
 }
 

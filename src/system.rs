@@ -1,5 +1,5 @@
 use std::error::Error;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH, Duration};
 use std::sync::atomic::{AtomicU16, Ordering};
 use crate::config::Config;
 use log::LevelFilter;
@@ -22,7 +22,55 @@ impl Display for FileNotFoundError {
 
 impl Error for FileNotFoundError {}
 
-pub fn get_timestamp() -> u128 {
+pub struct TimeNow {
+    timestamp: u128,
+    add_duration: Duration,
+    sub_duration: Duration,
+}
+
+impl TimeNow {
+    #[cfg(test)]
+    pub fn get(&self) -> u128 {
+        let add = self.add_duration.as_millis();
+        let sub = self.sub_duration.as_millis();
+        self.timestamp + add - sub
+    }
+    #[cfg(test)]
+    pub fn from(timestamp: u128) -> Self {
+        TimeNow {
+            timestamp,
+            add_duration: Default::default(),
+            sub_duration: Default::default(),
+        }
+    }
+    #[cfg(not(test))]
+    pub fn get(&self) -> u128 {
+        let current_time = get_timestamp();
+        let add = self.add_duration.as_millis();
+        let sub = self.sub_duration.as_millis();
+        current_time + add - sub
+    }
+
+    pub fn new() -> Self {
+        TimeNow {
+            timestamp: 1000,
+            add_duration: Default::default(),
+            sub_duration: Default::default(),
+        }
+    }
+
+    pub fn add(mut self, d: Duration) -> Self {
+        self.add_duration = d;
+        self
+    }
+
+    pub fn sub(mut self, d: Duration) -> Self {
+        self.sub_duration = d;
+        self
+    }
+}
+
+fn get_timestamp() -> u128 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("Time went backwards").as_millis()
