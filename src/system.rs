@@ -24,7 +24,7 @@ impl Display for FileNotFoundError {
 impl Error for FileNotFoundError {}
 
 pub struct TimeNow {
-    timestamp: u128,
+    #[cfg(test)] timestamp: u128,
     add_duration: Duration,
     sub_duration: Duration,
 }
@@ -41,6 +41,16 @@ impl TimeNow {
         self.timestamp = timestamp;
         self
     }
+
+    #[cfg(test)]
+    pub fn new() -> Self {
+        TimeNow {
+            timestamp: 0,
+            add_duration: Default::default(),
+            sub_duration: Default::default(),
+        }
+    }
+
     #[cfg(not(test))]
     pub fn get(&self) -> u128 {
         let current_time = get_timestamp();
@@ -49,9 +59,9 @@ impl TimeNow {
         current_time + add - sub
     }
 
+    #[cfg(not(test))]
     pub fn new() -> Self {
         TimeNow {
-            timestamp: 0,
             add_duration: Default::default(),
             sub_duration: Default::default(),
         }
