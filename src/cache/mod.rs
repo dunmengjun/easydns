@@ -29,7 +29,7 @@ impl CachePool {
         let limit_map = Arc::new(if config.cache_on {
             create_map_by_config(config).await?
         } else {
-            LimitedMap::new()
+            LimitedMap::from(0)
         });
         let strategy: Box<dyn CacheStrategy> = if config.cache_get_strategy == 0 {
             Box::new(ExpiredCacheStrategy::from(limit_map.clone()))

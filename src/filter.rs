@@ -182,19 +182,19 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
-    async fn test_read_url_to_filter() -> Result<()> {
-        let filter = read_resource_to_filter(
-            "https://raw.githubusercontent.com/dunmengjun\
-            /SmartDNS-GFWList/master/test_url_filter.txt",
-        ).await?;
-
-        let mut expected: HashSet<FilterItem> = HashSet::new();
-        expected.insert(String::from("00-gov.cn").into());
-        expected.insert(String::from("kwcdn.000dn.com").into());
-        assert_eq!(expected, filter);
-        Ok(())
-    }
+    // #[tokio::test]
+    // async fn test_read_url_to_filter() -> Result<()> {
+    //     let filter = read_resource_to_filter(
+    //         "https://raw.githubusercontent.com/dunmengjun\
+    //         /SmartDNS-GFWList/master/test_url_filter.txt",
+    //     ).await?;
+    //
+    //     let mut expected: HashSet<FilterItem> = HashSet::new();
+    //     expected.insert(String::from("00-gov.cn").into());
+    //     expected.insert(String::from("kwcdn.000dn.com").into());
+    //     assert_eq!(expected, filter);
+    //     Ok(())
+    // }
 
     #[tokio::test]
     async fn test_filter_item_overcast() -> Result<()> {
