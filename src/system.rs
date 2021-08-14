@@ -1,5 +1,5 @@
 use std::error::Error;
-use std::time::{SystemTime, UNIX_EPOCH, Duration};
+use std::time::{Duration};
 use std::sync::atomic::{AtomicU16, Ordering};
 use crate::config::Config;
 use log::LevelFilter;
@@ -79,6 +79,10 @@ pub fn get_sub_now(d: Duration) -> u128 {
     })
 }
 
+#[cfg(not(test))]
+use std::time::{SystemTime, UNIX_EPOCH};
+
+#[cfg(not(test))]
 fn get_timestamp() -> u128 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)

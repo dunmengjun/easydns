@@ -37,7 +37,7 @@ impl<K, V> LimitedMap<K, V>
             });
             vec.sort_unstable_by_key(|(_, sort_key)| sort_key.clone());
             let keys: Vec<&K> = vec[0..self.limit / 10].iter()
-                .map(|(k, v)| k).collect();
+                .map(|(k, _)| k).collect();
             self.records.retain(|r, _| {
                 !keys.contains(&r)
             })

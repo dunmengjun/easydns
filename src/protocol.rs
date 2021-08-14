@@ -458,22 +458,7 @@ impl DNSAnswer {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::protocol::{DNSAnswer, DNSQuery, ResourceRecord, Header, Question};
-
-    pub fn build_simple_answer(query: &DNSQuery, data: Vec<u8>, ttl: u32) -> DNSAnswer {
-        let mut answer = DNSAnswer::from_query(query);
-        let record = ResourceRecord {
-            name: query.get_domain().clone(),
-            _type: 1,
-            class: 1,
-            ttl,
-            data_len: data.len() as u16,
-            data,
-        };
-        answer.answers.push(record);
-        answer.header.answer_count = answer.answers.len() as u16;
-        answer
-    }
+    use crate::protocol::{DNSAnswer, ResourceRecord, Header, Question};
 
     pub fn get_valid_answer() -> DNSAnswer {
         let question = Question {
