@@ -3,7 +3,7 @@ use crate::cache::{F_DELIMITER, F_SPACE};
 use crate::system::{get_now};
 use crate::protocol::DNSAnswer;
 
-#[derive(Clone, PartialOrd, PartialEq)]
+#[derive(Clone, PartialOrd, PartialEq, Debug)]
 pub struct DNSCacheRecord {
     pub domain: Vec<u8>,
     pub address: Vec<u8>,
@@ -87,6 +87,129 @@ impl From<DNSAnswer> for DNSCacheRecord {
             address,
             start_time: get_now(),
             ttl_ms: ttl,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::cache::DNSCacheRecord;
+    use crate::system::TIME;
+    use crate::cache::limit_map::GetOrdKey;
+    use crate::protocol::tests::get_valid_answer;
+
+    #[test]
+    fn should_return_true_when_check_expired_given_expired() {
+        let record = get_test_record();
+
+        let result = record.is_expired(1001);
+
+        assert!(result)
+    }
+
+    #[test]
+    fn should_return_false_when_check_expired_given_not_expired() {
+        let record = get_test_record();
+
+        let result = record.is_expired(999);
+
+        assert!(!result)
+    }
+
+    #[test]
+    fn should_return_remain_time_when_get_remain_time_given_not_expired() {
+        let record = get_test_record();
+        TIME.with(|t| {
+            t.borrow_mut().set_timestamp(999);
+        });
+
+        let result = record.get_remain_time();
+
+        assert_eq!(1, result)
+    }
+
+    #[test]
+    fn should_return_0_when_get_remain_time_given_expired() {
+        let record = get_test_record();
+        TIME.with(|t| {
+            t.borrow_mut().set_timestamp(1001);
+        });
+
+        let result = record.get_remain_time();
+
+        assert_eq!(0, result)
+    }
+
+    #[test]
+    fn should_return_valid_record_when_create_from_bytes_given_valid_bytes() {
+        let vec = get_test_bytes();
+        let valid_bytes = vec.as_slice();
+
+        let result = DNSCacheRecord::from_bytes(valid_bytes);
+
+        let expected = get_valid_record();
+        assert_eq!(expected, result)
+    }
+
+    #[test]
+    fn should_return_bytes_when_to_from_bytes_given_valid_bytes() {
+        let record = get_valid_record();
+
+        let result = record.to_file_bytes();
+
+        let expected = get_test_bytes();
+        assert_eq!(expected, result)
+    }
+
+    #[test]
+    fn should_return_remain_time_when_get_order_key_given_test_record() {
+        let record = get_test_record();
+        TIME.with(|t| {
+            t.borrow_mut().set_timestamp(999);
+        });
+
+        let result: u128 = record.get_order_key();
+
+        assert_eq!(1, result)
+    }
+
+    #[test]
+    fn should_return_valid_record_when_from_answer_given_valid_answer() {
+        let answer = get_valid_answer();
+        TIME.with(|t| {
+            t.borrow_mut().set_timestamp(0);
+        });
+
+        let result = DNSCacheRecord::from(answer);
+
+        let expected = get_valid_record();
+        assert_eq!(expected, result)
+    }
+
+    fn get_test_bytes() -> Vec<u8> {
+        let bytes: [u8; 43] = [3, 119, 119, 119, 5, 98, 97, 105, 100, 117, 3, 99, 111, 109, 0, 124, 1, 1, 1, 1, 124, 0, 0, 3, 232, 124, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 32];
+        let mut vec = Vec::with_capacity(43);
+        for c in bytes.iter() {
+            vec.push(c.clone())
+        }
+        vec
+    }
+
+    fn get_valid_record() -> DNSCacheRecord {
+        DNSCacheRecord {
+            domain: vec![3, 119, 119, 119, 5, 98, 97, 105, 100, 117, 3, 99, 111, 109, 0],
+            address: vec![1, 1, 1, 1],
+            start_time: 0,
+            ttl_ms: 1000,
+        }
+    }
+
+    fn get_test_record() -> DNSCacheRecord {
+        DNSCacheRecord {
+            domain: vec![],
+            address: vec![],
+            start_time: 0,
+            ttl_ms: 1000,
         }
     }
 }
