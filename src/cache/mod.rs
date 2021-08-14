@@ -1,41 +1,47 @@
 mod limit_map;
 mod record;
+mod strategy;
 
 use crate::protocol::DNSAnswer;
 use crate::config::Config;
-use crate::system::{Result, get_now, get_duration_now};
+use crate::system::{Result, get_now};
 use std::sync::Arc;
 use limit_map::{LimitedMap};
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use std::time::Duration;
 
 pub use record::DNSCacheRecord;
+use crate::cache::strategy::{ExpiredCacheStrategy, TimeoutCacheStrategy, CacheStrategy};
 
 const F_DELIMITER: u8 = '|' as u8;
 const F_SPACE: u8 = ' ' as u8;
 
+
 pub struct CachePool {
     disabled: bool,
-    strategy: usize,
-    timeout: u128,
+    strategy: Box<dyn CacheStrategy>,
     file_name: String,
     map: Arc<LimitedMap<Vec<u8>, DNSCacheRecord>>,
 }
 
 impl CachePool {
     pub async fn from(config: &Config) -> Result<Self> {
-        let limit_map = if config.cache_on {
+        let limit_map = Arc::new(if config.cache_on {
             create_map_by_config(config).await?
         } else {
             LimitedMap::new()
+        });
+        let strategy: Box<dyn CacheStrategy> = if config.cache_get_strategy == 0 {
+            Box::new(ExpiredCacheStrategy::from(limit_map.clone()))
+        } else {
+            Box::new(TimeoutCacheStrategy::from(limit_map.clone(),
+                                                config.cache_ttl_timeout_ms as u128))
         };
         Ok(CachePool {
             disabled: !config.cache_on,
-            strategy: config.cache_get_strategy,
-            timeout: config.cache_ttl_timeout_ms as u128,
+            strategy,
             file_name: config.cache_file.clone(),
-            map: Arc::new(limit_map),
+            map: limit_map,
         })
     }
     pub fn get(&self, key: &Vec<u8>, get_value_fn: impl FnOnce() -> Result<DNSAnswer> + Send + 'static)
@@ -48,52 +54,14 @@ impl CachePool {
         match self.map.get(key) {
             //缓存中有
             Some(r) => {
-                self.get_with_strategy(key, r, get_value_fn)
+                self.strategy.handle(key.clone(), r, Box::new(get_value_fn))
             }
             //缓存中没有
             None => {
-                self.sync_get_and_insert(key.clone(), get_value_fn)
+                let answer = get_value_fn()?;
+                self.map.insert(key.clone(), answer.clone().into());
+                Ok(answer)
             }
-        }
-    }
-
-    fn sync_get_and_insert(&self, key: Vec<u8>, get_value_fn: impl FnOnce() -> Result<DNSAnswer>) -> Result<DNSAnswer> {
-        let answer = get_value_fn()?;
-        self.map.insert(key, answer.clone().into());
-        Ok(answer)
-    }
-
-    fn async_get_and_insert(&self, key: Vec<u8>, get_value_fn: impl FnOnce() -> Result<DNSAnswer> + Send + 'static) {
-        let cloned_map = self.map.clone();
-        tokio::spawn(async move {
-            match get_value_fn() {
-                Ok(answer) => {
-                    cloned_map.insert(key, answer.into());
-                }
-                Err(e) => {
-                    error!("{}", e);
-                }
-            }
-        });
-    }
-    fn get_with_strategy(&self,
-                         key: &Vec<u8>,
-                         value: DNSCacheRecord,
-                         get_value_fn: impl FnOnce() -> Result<DNSAnswer> + Send + 'static) -> Result<DNSAnswer> {
-        if value.is_expired(get_now()) {
-            if self.strategy == 0 {
-                self.map.remove(key);
-                self.sync_get_and_insert(key.clone(), get_value_fn)
-            } else {
-                //超时测试
-                let timeout = get_duration_now(Duration::from_millis(self.timeout as u64));
-                if value.is_expired(timeout) {
-                    self.async_get_and_insert(key.clone(), get_value_fn);
-                }
-                Ok(value.into())
-            }
-        } else {
-            Ok(value.into())
         }
     }
 
@@ -150,3 +118,6 @@ fn create_map_by_vec_u8(config: &Config, file_vec: Vec<u8>) -> LimitedMap<Vec<u8
     }
     map
 }
+
+#[cfg(test)]
+mod tests {}

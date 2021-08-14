@@ -59,8 +59,8 @@ impl TimeNow {
         }
     }
 
-    pub fn add(&mut self, d: Duration) -> &mut Self {
-        self.add_duration = d;
+    pub fn sub(&mut self, d: Duration) -> &mut Self {
+        self.sub_duration = d;
         self
     }
 }
@@ -75,9 +75,9 @@ pub fn get_now() -> u128 {
     })
 }
 
-pub fn get_duration_now(d: Duration) -> u128 {
+pub fn get_sub_now(d: Duration) -> u128 {
     TIME.with(|r| {
-        r.borrow_mut().add(d).get()
+        r.borrow_mut().sub(d).get()
     })
 }
 
