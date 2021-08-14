@@ -31,7 +31,7 @@ impl ExpiredCacheStrategy {
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use crate::cache::expired_strategy::ExpiredCacheStrategy;
     use crate::cache::limit_map::LimitedMap;
     use crate::cache::{DNSCacheRecord, CacheStrategy};
@@ -76,7 +76,7 @@ mod tests {
         assert_eq!(Some(expected), strategy.map.get(&key))
     }
 
-    fn get_test_func() -> (Arc<AtomicBool>, Box<dyn FnOnce() -> Result<DNSAnswer> + Send + 'static>) {
+    pub fn get_test_func() -> (Arc<AtomicBool>, Box<dyn FnOnce() -> Result<DNSAnswer> + Send + 'static>) {
         let is_called = Arc::new(AtomicBool::new(false));
         let rc = is_called.clone();
         let func = Box::new(move || -> Result<DNSAnswer>{

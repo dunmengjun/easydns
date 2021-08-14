@@ -25,15 +25,15 @@ impl Error for FileNotFoundError {}
 
 pub struct TimeNow {
     #[cfg(test)] timestamp: u128,
-    add_duration: Duration,
-    sub_duration: Duration,
+    add_duration: Option<Duration>,
+    sub_duration: Option<Duration>,
 }
 
 impl TimeNow {
     #[cfg(test)]
-    pub fn get(&self) -> u128 {
-        let add = self.add_duration.as_millis();
-        let sub = self.sub_duration.as_millis();
+    pub fn get(&mut self) -> u128 {
+        let add = self.add_duration.take().map(|d| d.as_millis()).unwrap_or(0);
+        let sub = self.sub_duration.take().map(|d| d.as_millis()).unwrap_or(0);
         self.timestamp + add - sub
     }
     #[cfg(test)]
@@ -46,29 +46,29 @@ impl TimeNow {
     pub fn new() -> Self {
         TimeNow {
             timestamp: 0,
-            add_duration: Default::default(),
-            sub_duration: Default::default(),
+            add_duration: None,
+            sub_duration: None,
         }
     }
 
     #[cfg(not(test))]
-    pub fn get(&self) -> u128 {
+    pub fn get(&mut self) -> u128 {
         let current_time = get_timestamp();
-        let add = self.add_duration.as_millis();
-        let sub = self.sub_duration.as_millis();
+        let add = self.add_duration.take().map(|d| d.as_millis()).unwrap_or(0);
+        let sub = self.sub_duration.take().map(|d| d.as_millis()).unwrap_or(0);
         current_time + add - sub
     }
 
     #[cfg(not(test))]
     pub fn new() -> Self {
         TimeNow {
-            add_duration: Default::default(),
-            sub_duration: Default::default(),
+            add_duration: None,
+            sub_duration: None,
         }
     }
 
     pub fn sub(&mut self, d: Duration) -> &mut Self {
-        self.sub_duration = d;
+        self.sub_duration = Some(d);
         self
     }
 }
@@ -79,7 +79,7 @@ thread_local! {
 
 pub fn get_now() -> u128 {
     TIME.with(|r| {
-        r.borrow().get()
+        r.borrow_mut().get()
     })
 }
 
@@ -91,12 +91,21 @@ pub fn get_sub_now(d: Duration) -> u128 {
 
 #[cfg(not(test))]
 use std::time::{SystemTime, UNIX_EPOCH};
+use tokio::runtime::Handle;
+use std::future::Future;
 
 #[cfg(not(test))]
 fn get_timestamp() -> u128 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("Time went backwards").as_millis()
+}
+
+#[cfg(test)]
+pub fn set_time_base(base: u128) {
+    TIME.with(|r| {
+        r.borrow_mut().set_timestamp(base);
+    })
 }
 
 static ID: AtomicU16 = AtomicU16::new(0);
@@ -124,4 +133,12 @@ pub fn setup_log_level(config: &Config) -> Result<()> {
     let level = LevelFilter::from_str(&config.log_level)?;
     log::set_max_level(level);
     Ok(())
+}
+
+pub fn block_on<F: Future>(future: F) -> F::Output {
+    tokio::task::block_in_place(move || {
+        Handle::current().block_on(async {
+            future.await
+        })
+    })
 }

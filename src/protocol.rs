@@ -488,4 +488,33 @@ pub mod tests {
             authorities: vec![],
         }
     }
+
+    pub fn get_valid_answer_with_ttl(ttl: u32) -> DNSAnswer {
+        let question = Question {
+            name: vec![3, 119, 119, 119, 5, 98, 97, 105, 100, 117, 3, 99, 111, 109, 0],
+            _type: 1,
+            class: 1,
+        };
+        let record = ResourceRecord {
+            name: vec![3, 119, 119, 119, 5, 98, 97, 105, 100, 117, 3, 99, 111, 109, 0],
+            _type: 1,
+            class: 1,
+            ttl,
+            data_len: 4,
+            data: vec![1, 1, 1, 1],
+        };
+        DNSAnswer {
+            header: Header {
+                id: 0,
+                flags: 0x8180,
+                question_count: 1,
+                answer_count: 1,
+                authority_count: 0,
+                additional_count: 0,
+            },
+            questions: vec![question],
+            answers: vec![record],
+            authorities: vec![],
+        }
+    }
 }
