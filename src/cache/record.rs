@@ -92,7 +92,7 @@ impl From<DNSAnswer> for DNSCacheRecord {
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use crate::cache::DNSCacheRecord;
     use crate::system::TIME;
     use crate::cache::limit_map::GetOrdKey;
@@ -195,13 +195,19 @@ mod tests {
         vec
     }
 
-    fn get_valid_record() -> DNSCacheRecord {
+    pub fn get_valid_record() -> DNSCacheRecord {
         DNSCacheRecord {
             domain: vec![3, 119, 119, 119, 5, 98, 97, 105, 100, 117, 3, 99, 111, 109, 0],
             address: vec![1, 1, 1, 1],
             start_time: 0,
             ttl_ms: 1000,
         }
+    }
+
+    pub fn build_valid_record(f: fn(&mut DNSCacheRecord)) -> DNSCacheRecord {
+        let mut record = get_valid_record();
+        f(&mut record);
+        record
     }
 
     fn get_test_record() -> DNSCacheRecord {

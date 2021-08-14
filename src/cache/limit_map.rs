@@ -46,10 +46,6 @@ impl<K, V> LimitedMap<K, V>
         self.records.insert(key, value);
     }
 
-    pub fn remove(&self, key: &K) {
-        self.records.remove(key);
-    }
-
     pub fn iter(&self) -> dashmap::iter::Iter<K, V, RandomState, DashMap<K, V, RandomState>> {
         self.records.iter()
     }
@@ -97,18 +93,6 @@ mod tests {
         assert_eq!(Some(1000), result);
         assert_eq!(91, map.records.len());
         assert_eq!(None, over_result)
-    }
-
-    #[test]
-    fn should_remove_from_map_when_call_remove_given_has_value_in_map() {
-        let map = LimitedMap::from(1);
-        map.records.insert(1, 1);
-
-        map.remove(&1);
-
-        let result = map.records.get(&1)
-            .map(|r| r.value().clone());
-        assert_eq!(None, result)
     }
 
     #[test]

@@ -1,6 +1,7 @@
 mod limit_map;
 mod record;
-mod strategy;
+mod expired_strategy;
+mod timeout_strategy;
 
 use crate::protocol::DNSAnswer;
 use crate::config::Config;
@@ -11,11 +12,16 @@ use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 pub use record::DNSCacheRecord;
-use crate::cache::strategy::{ExpiredCacheStrategy, TimeoutCacheStrategy, CacheStrategy};
+use crate::cache::expired_strategy::ExpiredCacheStrategy;
+use crate::cache::timeout_strategy::TimeoutCacheStrategy;
 
 const F_DELIMITER: u8 = '|' as u8;
 const F_SPACE: u8 = ' ' as u8;
 
+pub trait CacheStrategy: Send + Sync {
+    fn handle(&self, key: Vec<u8>, record: DNSCacheRecord,
+              get_value_fn: Box<dyn FnOnce() -> Result<DNSAnswer> + Send + 'static>) -> Result<DNSAnswer>;
+}
 
 pub struct CachePool {
     disabled: bool,
