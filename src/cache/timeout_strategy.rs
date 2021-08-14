@@ -70,11 +70,11 @@ mod tests {
     fn should_return_answer_when_call_handle_given_no_expired_record() {
         let strategy = TimeoutCacheStrategy {
             map: Arc::new(LimitedMap::<Vec<u8>, DNSCacheRecord>::from(0)),
-            timeout: 1000,
+            timeout: 800,
         };
         let (is_called, func) = get_test_func();
         let record = get_valid_record();
-        set_time_base(1001);
+        set_time_base(999);
 
         let result = strategy.handle(record.domain.clone(), record, func);
 
