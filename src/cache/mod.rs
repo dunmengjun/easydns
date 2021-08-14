@@ -3,7 +3,7 @@ mod record;
 
 use crate::protocol::DNSAnswer;
 use crate::config::Config;
-use crate::system::{Result, TimeNow};
+use crate::system::{Result, get_now, get_duration_now};
 use std::sync::Arc;
 use limit_map::{LimitedMap};
 use tokio::fs::File;
@@ -80,13 +80,13 @@ impl CachePool {
                          key: &Vec<u8>,
                          value: DNSCacheRecord,
                          get_value_fn: impl FnOnce() -> Result<DNSAnswer> + Send + 'static) -> Result<DNSAnswer> {
-        if value.is_expired(TimeNow::new()) {
+        if value.is_expired(get_now()) {
             if self.strategy == 0 {
                 self.map.remove(key);
                 self.sync_get_and_insert(key.clone(), get_value_fn)
             } else {
                 //超时测试
-                let timeout = TimeNow::new().add(Duration::from_millis(self.timeout as u64));
+                let timeout = get_duration_now(Duration::from_millis(self.timeout as u64));
                 if value.is_expired(timeout) {
                     self.async_get_and_insert(key.clone(), get_value_fn);
                 }
@@ -144,7 +144,7 @@ fn create_map_by_vec_u8(config: &Config, file_vec: Vec<u8>) -> LimitedMap<Vec<u8
     let split = file_vec.as_slice().split(|e| F_SPACE == *e);
     for r_bytes in split {
         let record = DNSCacheRecord::from_bytes(r_bytes);
-        if !record.is_expired(TimeNow::new()) {
+        if !record.is_expired(get_now()) {
             map.insert(record.domain.clone(), record);
         }
     }

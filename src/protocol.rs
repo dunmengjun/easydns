@@ -2,7 +2,7 @@ use std::fmt::{Debug};
 use crate::buffer::PacketBuffer;
 use crate::cache::DNSCacheRecord;
 use std::net::{IpAddr, Ipv4Addr};
-use crate::system::{next_id, TimeNow};
+use crate::system::{next_id};
 
 const C_FACTOR: u8 = 192u8;
 const DC_FACTOR: u16 = 16383u16;
@@ -302,7 +302,7 @@ impl From<DNSCacheRecord> for DNSAnswer {
             name: record.get_domain().clone(),
             _type: 1,
             class: 1,
-            ttl: record.get_remain_time(TimeNow::new()) as u32 / 1000,
+            ttl: record.get_remain_time() as u32 / 1000,
             data_len: 4,
             data: record.get_address().clone(),
         });

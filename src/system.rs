@@ -5,6 +5,7 @@ use crate::config::Config;
 use log::LevelFilter;
 use std::str::FromStr;
 use std::fmt::{Debug, Formatter, Display};
+use std::cell::RefCell;
 
 pub type Result<T> = core::result::Result<T, Box<dyn Error>>;
 
@@ -23,7 +24,9 @@ impl Display for FileNotFoundError {
 impl Error for FileNotFoundError {}
 
 pub struct TimeNow {
+    #[cfg(test)]
     timestamp: u128,
+
     add_duration: Duration,
     sub_duration: Duration,
 }
@@ -36,12 +39,9 @@ impl TimeNow {
         self.timestamp + add - sub
     }
     #[cfg(test)]
-    pub fn from(timestamp: u128) -> Self {
-        TimeNow {
-            timestamp,
-            add_duration: Default::default(),
-            sub_duration: Default::default(),
-        }
+    pub fn set_timestamp(&mut self, timestamp: u128) -> &mut self {
+        self.timestamp = timestamp;
+        self
     }
     #[cfg(not(test))]
     pub fn get(&self) -> u128 {
@@ -51,23 +51,34 @@ impl TimeNow {
         current_time + add - sub
     }
 
+    #[cfg(not(test))]
     pub fn new() -> Self {
         TimeNow {
-            timestamp: 1000,
             add_duration: Default::default(),
             sub_duration: Default::default(),
         }
     }
 
-    pub fn add(mut self, d: Duration) -> Self {
+    pub fn add(&mut self, d: Duration) -> &mut Self {
         self.add_duration = d;
         self
     }
+}
 
-    pub fn sub(mut self, d: Duration) -> Self {
-        self.sub_duration = d;
-        self
-    }
+thread_local! {
+    pub static TIME: RefCell<TimeNow> = RefCell::new(TimeNow::new());
+}
+
+pub fn get_now() -> u128 {
+    TIME.with(|r| {
+        r.borrow().get()
+    })
+}
+
+pub fn get_duration_now(d: Duration) -> u128 {
+    TIME.with(|r| {
+        r.borrow_mut().add(d).get()
+    })
 }
 
 fn get_timestamp() -> u128 {

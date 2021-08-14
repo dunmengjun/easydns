@@ -1,6 +1,6 @@
 use crate::cache::limit_map::GetOrdKey;
 use crate::cache::{F_DELIMITER, F_SPACE};
-use crate::system::TimeNow;
+use crate::system::{get_now};
 use crate::protocol::DNSAnswer;
 
 #[derive(Clone, PartialOrd, PartialEq)]
@@ -12,13 +12,13 @@ pub struct DNSCacheRecord {
 }
 
 impl DNSCacheRecord {
-    pub fn is_expired(&self, time: TimeNow) -> bool {
-        let duration = time.get() - self.start_time;
+    pub fn is_expired(&self, now: u128) -> bool {
+        let duration = now - self.start_time;
         self.ttl_ms < duration
     }
 
-    pub fn get_remain_time(&self, now: TimeNow) -> u128 {
-        let duration = now.get() - self.start_time;
+    pub fn get_remain_time(&self) -> u128 {
+        let duration = get_now() - self.start_time;
         if self.ttl_ms > duration {
             self.ttl_ms - duration
         } else {
@@ -40,7 +40,7 @@ impl DNSCacheRecord {
         vec.push(F_DELIMITER);
         vec.extend(&self.address);
         vec.push(F_DELIMITER);
-        vec.extend(&(self.get_remain_time(TimeNow::new()) as u32).to_be_bytes());
+        vec.extend(&(self.get_remain_time() as u32).to_be_bytes());
         vec.push(F_DELIMITER);
         vec.extend(&self.start_time.to_be_bytes());
         vec.push(F_SPACE);
@@ -73,7 +73,7 @@ impl DNSCacheRecord {
 impl GetOrdKey for DNSCacheRecord {
     type Output = u128;
     fn get_order_key(&self) -> Self::Output {
-        self.get_remain_time(TimeNow::new())
+        self.get_remain_time()
     }
 }
 
@@ -85,7 +85,7 @@ impl From<DNSAnswer> for DNSCacheRecord {
         DNSCacheRecord {
             domain,
             address,
-            start_time: TimeNow::new().get(),
+            start_time: get_now(),
             ttl_ms: ttl,
         }
     }

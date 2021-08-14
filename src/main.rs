@@ -5,7 +5,7 @@ use std::sync::Arc;
 use simple_logger::SimpleLogger;
 
 use crate::handler::*;
-use crate::system::Result;
+use crate::system::{Result};
 
 mod buffer;
 mod config;
