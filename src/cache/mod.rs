@@ -126,4 +126,6 @@ fn create_map_by_vec_u8(config: &Config, file_vec: Vec<u8>) -> LimitedMap<Vec<u8
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+
+}

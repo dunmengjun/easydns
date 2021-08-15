@@ -1,9 +1,9 @@
 use async_trait::async_trait;
-use crate::handler::server::ServerGroup;
 use std::sync::Arc;
 use crate::protocol::{DNSQuery, DNSAnswer};
 use crate::handler::{Handler, Clain};
 use crate::system::Result;
+use crate::handler::server_group::ServerGroup;
 
 #[derive(Clone)]
 pub struct LegalChecker {

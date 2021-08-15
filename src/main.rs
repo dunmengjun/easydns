@@ -29,8 +29,6 @@ async fn main() -> Result<()> {
     let handler = Arc::new(HandlerContext::from(config).await?);
 
     setup_exit_process_task(&handler);
-    setup_answer_accept_task(&handler);
-    setup_choose_fast_server_task(&handler);
 
     //从客户端接受请求的主循环
     loop {

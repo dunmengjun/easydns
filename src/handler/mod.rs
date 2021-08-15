@@ -3,11 +3,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use tokio::net::UdpSocket;
-use tokio::time::Duration;
-use tokio::time::interval;
 use tokio_icmp::Pinger;
-
-use server::ServerGroup;
 
 use crate::buffer::PacketBuffer;
 use crate::cache::CachePool;
@@ -20,13 +16,14 @@ use crate::handler::legal_checker::LegalChecker;
 use crate::handler::query_sender::QuerySender;
 use crate::protocol::{DNSAnswer, DNSQuery};
 use crate::system::Result;
+use crate::handler::server_group::ServerGroup;
 
 mod legal_checker;
 mod cache_handler;
 mod query_sender;
 mod ip_maker;
 mod domain_filter;
-mod server;
+mod server_group;
 
 pub struct HandlerContext {
     server_group: Arc<ServerGroup>,
@@ -44,7 +41,11 @@ impl HandlerContext {
             Some(tokio_icmp::Pinger::new().await?)
         };
         let main_socket = UdpSocket::bind(("0.0.0.0", config.port)).await?;
-        let server_group = Arc::new(ServerGroup::from(&config).await?);
+        let server_group = Arc::new(ServerGroup::from(
+            config.servers.clone(),
+            config.server_choose_strategy.clone(),
+            (config.server_choose_duration_h * 60 * 60) as u64,
+        ).await?);
         let cache_pool = Arc::new(CachePool::from(&config).await?);
         let filter = Arc::new(Filter::from(&config).await);
         Ok(HandlerContext {
@@ -91,38 +92,6 @@ pub fn setup_exit_process_task(context: &HandlerContext) {
         tokio::signal::ctrl_c().await.expect("failed to listen for ctrl_c event");
         cloned_cache_pool.exit_process_action().await.unwrap();
         std::process::exit(0);
-    });
-}
-
-pub fn setup_answer_accept_task(context: &HandlerContext) {
-    //创建任务去recv从上游dns服务器返回的answer
-    let cloned_server_group = context.server_group.clone();
-    tokio::spawn(async move {
-        loop {
-            match cloned_server_group.recv().await {
-                Ok(()) => {}
-                Err(e) => error!("error occur here accept {:?}", e),
-            }
-        }
-    });
-}
-
-pub fn setup_choose_fast_server_task(context: &HandlerContext) {
-    let server_group = context.server_group.clone();
-    if server_group.server_choose_strategy != 0 {
-        return;
-    }
-    //创建定时任务去定时的优选上游dns servers,半天触发一次
-    let duration_secs = server_group.server_choose_duration_h * 60 * 60;
-    tokio::spawn(async move {
-        let mut interval = interval(Duration::from_secs(duration_secs as u64));
-        loop {
-            interval.tick().await;
-            let test_query = DNSQuery::from_domain("www.baidu.com");
-            if let Err(e) = server_group.preferred_dns_server(test_query).await {
-                error!("interval task upstream servers choose has error: {:?}", e)
-            }
-        }
     });
 }
 
