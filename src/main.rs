@@ -6,6 +6,7 @@ use simple_logger::SimpleLogger;
 
 use crate::handler::*;
 use crate::system::{Result};
+use crate::client::ClientSocket;
 
 mod buffer;
 mod config;
@@ -14,6 +15,7 @@ mod protocol;
 mod system;
 mod handler;
 mod cache;
+mod client;
 
 #[macro_use]
 extern crate log;
@@ -26,17 +28,25 @@ async fn main() -> Result<()> {
 
     let config = config::init_from_toml().await?;
     system::setup_log_level(&config)?;
+    let client = Arc::new(ClientSocket::new(config.port).await?);
     let handler = Arc::new(HandlerContext::from(config).await?);
-    //从客户端接受请求的主循环
+    //主循环
     loop {
         tokio::select! {
-            result = handler.recv_query() => {
+            result = client.recv() => {
                 let (buffer, src) = result?;
+                let arc_client = client.clone();
                 let arc_handler = handler.clone();
                 tokio::spawn(async move {
-                    match arc_handler.handle_task(src, buffer).await {
-                        Ok(_) => {}
-                        Err(e) => error!("error occur here main{:?}", e),
+                    let answer = match arc_handler.handle_task(buffer).await {
+                        Ok(answer) => answer,
+                        Err(e) => {
+                            error!("Handle query task error: {:?}", e);
+                            return;
+                        },
+                    };
+                    if let Err(e) = arc_client.back_to(src, answer).await {
+                        error!("Send answer back to client error: {:?}", e)
                     }
                 });
             },
