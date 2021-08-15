@@ -21,6 +21,11 @@ impl QuerySender {
 #[async_trait]
 impl Handler for QuerySender {
     async fn handle(&self, _: &mut Clain, query: DNSQuery) -> Result<DNSAnswer> {
-        self.server_group.send_query(&query).await
+        let answer = self.server_group.send_query(&query).await?;
+        // info!("answer: {:?}", answer);
+        // if answer.is_empty() {
+        //     return Err("answer is empty".into());
+        // }
+        Ok(answer)
     }
 }

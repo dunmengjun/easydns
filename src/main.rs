@@ -21,6 +21,7 @@ mod client;
 extern crate log;
 
 //dig @127.0.0.1 -p 2053 www.baidu.com
+//dig @127.0.0.1 -p 2053 0-100.com
 #[tokio::main]
 async fn main() -> Result<()> {
     SimpleLogger::new().init()?;
@@ -45,6 +46,7 @@ async fn main() -> Result<()> {
                             return;
                         },
                     };
+                    info!("answer: {:?}", answer);
                     if let Err(e) = arc_client.back_to(src, answer).await {
                         error!("Send answer back to client error: {:?}", e)
                     }

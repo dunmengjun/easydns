@@ -1,7 +1,7 @@
 mod limit_map;
-mod record;
 mod expired_strategy;
 mod timeout_strategy;
+mod cache_record;
 
 use crate::protocol::DNSAnswer;
 use crate::config::Config;
@@ -11,15 +11,20 @@ use limit_map::{LimitedMap};
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-pub use record::DNSCacheRecord;
+pub use cache_record::CacheRecord;
+pub use cache_record::IpCacheRecord;
+pub use cache_record::SoaCacheRecord;
+pub use cache_record::CacheItem;
 use crate::cache::expired_strategy::ExpiredCacheStrategy;
 use crate::cache::timeout_strategy::TimeoutCacheStrategy;
+use crate::cache::cache_record::IP_RECORD;
+use crate::cache::cache_record::SOA_RECORD;
 
 const F_DELIMITER: u8 = '|' as u8;
 const F_SPACE: u8 = ' ' as u8;
 
 pub trait CacheStrategy: Send + Sync {
-    fn handle(&self, key: Vec<u8>, record: DNSCacheRecord,
+    fn handle(&self, key: Vec<u8>, record: CacheRecord,
               get_value_fn: Box<dyn FnOnce() -> Result<DNSAnswer> + Send + 'static>) -> Result<DNSAnswer>;
 }
 
@@ -27,7 +32,7 @@ pub struct CachePool {
     disabled: bool,
     strategy: Box<dyn CacheStrategy>,
     file_name: String,
-    map: Arc<LimitedMap<Vec<u8>, DNSCacheRecord>>,
+    map: Arc<LimitedMap<Vec<u8>, CacheRecord>>,
 }
 
 impl Drop for CachePool {
@@ -45,7 +50,7 @@ impl Drop for CachePool {
 
 impl CachePool {
     pub async fn from(config: &Config) -> Result<Self> {
-        let limit_map = Arc::new(if config.cache_on {
+        let limit_map: Arc<LimitedMap<Vec<u8>, CacheRecord>> = Arc::new(if config.cache_on {
             create_map_by_config(config).await?
         } else {
             LimitedMap::from(0)
@@ -73,7 +78,7 @@ impl CachePool {
         match self.map.get(key) {
             //缓存中有
             Some(r) => {
-                self.strategy.handle(key.clone(), r, Box::new(get_value_fn))
+                self.strategy.handle(key.clone(), r.boxed_clone(), Box::new(get_value_fn))
             }
             //缓存中没有
             None => {
@@ -87,7 +92,7 @@ impl CachePool {
     fn to_file_bytes(&self) -> Vec<u8> {
         let mut vec = Vec::new();
         self.map.iter().for_each(|e| {
-            vec.extend(e.value().to_file_bytes());
+            vec.extend(e.value().to_bytes());
         });
         vec.remove(vec.len() - 1);
         vec
@@ -109,7 +114,7 @@ impl CachePool {
     }
 }
 
-async fn create_map_by_config(config: &Config) -> Result<LimitedMap<Vec<u8>, DNSCacheRecord>> {
+async fn create_map_by_config(config: &Config) -> Result<LimitedMap<Vec<u8>, CacheRecord>> {
     Ok(match File::open(&config.cache_file).await {
         Ok(mut file) => {
             let mut file_vec = Vec::new();
@@ -126,13 +131,23 @@ async fn create_map_by_config(config: &Config) -> Result<LimitedMap<Vec<u8>, DNS
     })
 }
 
-fn create_map_by_vec_u8(config: &Config, file_vec: Vec<u8>) -> LimitedMap<Vec<u8>, DNSCacheRecord> {
+fn create_map_by_vec_u8(config: &Config, file_vec: Vec<u8>) -> LimitedMap<Vec<u8>, CacheRecord> {
     let map = LimitedMap::from(config.cache_num);
     let split = file_vec.as_slice().split(|e| F_SPACE == *e);
     for r_bytes in split {
-        let record = DNSCacheRecord::from_bytes(r_bytes);
+        let record: CacheRecord = match r_bytes[0] {
+            IP_RECORD => {
+                Box::new(IpCacheRecord::from(r_bytes))
+            }
+            SOA_RECORD => {
+                Box::new(SoaCacheRecord::from(r_bytes))
+            }
+            _ => {
+                panic!("xx");
+            }
+        };
         if !record.is_expired(get_now()) {
-            map.insert(record.domain.clone(), record);
+            map.insert(record.get_key().clone(), record);
         }
     }
     map

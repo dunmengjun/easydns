@@ -1,8 +1,8 @@
 use std::fmt::{Debug};
 use crate::buffer::PacketBuffer;
-use crate::cache::DNSCacheRecord;
 use std::net::{IpAddr, Ipv4Addr};
-use crate::system::{next_id};
+use crate::system::{next_id, get_now};
+use crate::cache::{IpCacheRecord, SoaCacheRecord, CacheItem};
 
 const C_FACTOR: u8 = 192u8;
 const DC_FACTOR: u16 = 16383u16;
@@ -64,10 +64,10 @@ impl Header {
             flags: u16::from_be_bytes([buffer.take(), buffer.take()]),
             question_count: u16::from_be_bytes([buffer.take(), buffer.take()]),
             answer_count: u16::from_be_bytes([buffer.take(), buffer.take()]),
-            authority_count: 0,
+            authority_count: u16::from_be_bytes([buffer.take(), buffer.take()]),
             additional_count: 0,
         };
-        buffer.move_to(4);
+        buffer.move_to(2);
         header
     }
 
@@ -230,8 +230,20 @@ impl ResourceRecord {
         let ttl = u32::from_be_bytes([buffer.take(),
             buffer.take(), buffer.take(), buffer.take()]);
         let data_len = u16::from_be_bytes([buffer.take(), buffer.take()]);
-        let data = if question._type == 5 { //说明是cname类型
+        let data = if question._type == 5 {
+            //说明是cname类型
             unzip_domain(buffer)
+        } else if question._type == 6 {
+            //soa类型
+            let old_index = buffer.get_current_index();
+            let mut vec = Vec::new();
+            vec.extend(unzip_domain(buffer));
+            vec.extend(unzip_domain(buffer));
+            let current_index = buffer.get_current_index();
+            let len = current_index - old_index;
+            let remained_slice = buffer.take_slice(data_len as usize - len);
+            vec.extend(remained_slice);
+            vec
         } else {
             Vec::<u8>::from(buffer.take_slice(data_len as usize))
         };
@@ -240,7 +252,7 @@ impl ResourceRecord {
             _type: question._type,
             class: question.class,
             ttl,
-            data_len,
+            data_len: data.len() as u16,
             data,
         }
     }
@@ -276,33 +288,37 @@ impl From<PacketBuffer> for DNSAnswer {
         (0..header.question_count as usize).into_iter().for_each(|_| {
             questions.push(Question::from(&mut buffer));
         });
-        let mut resources = Vec::new();
+        let mut answers = Vec::new();
         (0..header.answer_count as usize).into_iter().for_each(|_| {
-            resources.push(ResourceRecord::from(&mut buffer));
+            answers.push(ResourceRecord::from(&mut buffer));
+        });
+        let mut authorities = Vec::new();
+        (0..header.authority_count as usize).into_iter().for_each(|_| {
+            authorities.push(ResourceRecord::from(&mut buffer))
         });
         DNSAnswer {
             header,
             questions,
-            answers: resources,
-            authorities: vec![],
+            answers,
+            authorities,
         }
     }
 }
 
-impl From<DNSCacheRecord> for DNSAnswer {
-    fn from(record: DNSCacheRecord) -> Self {
+impl From<&IpCacheRecord> for DNSAnswer {
+    fn from(record: &IpCacheRecord) -> Self {
         let mut questions = Vec::new();
         let mut answers = Vec::new();
         questions.push(Question {
-            name: record.get_domain().clone(),
+            name: record.get_key().clone(),
             _type: 1,
             class: 1,
         });
         answers.push(ResourceRecord {
-            name: record.get_domain().clone(),
+            name: record.get_key().clone(),
             _type: 1,
             class: 1,
-            ttl: record.get_remain_time() as u32 / 1000,
+            ttl: record.get_remain_time(get_now()) as u32 / 1000,
             data_len: 4,
             data: record.get_address().clone(),
         });
@@ -318,6 +334,40 @@ impl From<DNSCacheRecord> for DNSAnswer {
             questions,
             answers,
             authorities: vec![],
+        }
+    }
+}
+
+impl From<&SoaCacheRecord> for DNSAnswer {
+    fn from(record: &SoaCacheRecord) -> Self {
+        let mut questions = Vec::new();
+        let mut authorities = Vec::new();
+        questions.push(Question {
+            name: record.get_key().clone(),
+            _type: 1,
+            class: 1,
+        });
+        let data = record.get_data();
+        authorities.push(ResourceRecord {
+            name: record.get_key().clone(),
+            _type: 6,
+            class: 1,
+            ttl: record.get_remain_time(get_now()) as u32 / 1000,
+            data_len: data.len() as u16,
+            data: data.clone(),
+        });
+        DNSAnswer {
+            header: Header {
+                id: 0,
+                flags: 0x8180,
+                question_count: 1,
+                answer_count: 0,
+                authority_count: 1,
+                additional_count: 0,
+            },
+            questions,
+            answers: vec![],
+            authorities,
         }
     }
 }
@@ -400,8 +450,16 @@ impl DNSAnswer {
         &self.questions[0].name
     }
 
-    pub fn get_ttl_secs(&self) -> u32 {
+    pub fn get_answer_ttl_secs(&self) -> u32 {
         self.answers[0].ttl
+    }
+
+    pub fn get_auth_ttl_secs(&self) -> u32 {
+        self.authorities[0].ttl
+    }
+
+    pub fn get_auth_data(&self) -> &Vec<u8> {
+        &self.authorities[0].data
     }
 
     pub fn get_address(&self) -> &Vec<u8> {
@@ -451,7 +509,7 @@ impl DNSAnswer {
         self.header.answer_count = self.answers.len() as u16;
     }
 
-    pub fn is_empty(&self) -> bool {
+    pub fn is_empty_answers(&self) -> bool {
         self.answers.is_empty()
     }
 }

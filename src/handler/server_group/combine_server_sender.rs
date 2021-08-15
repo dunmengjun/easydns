@@ -28,7 +28,7 @@ impl ServerSender for CombineServerSender {
                 }
             }
         }
-        if answer.is_empty() {
+        if answer.is_empty_answers() {
             return Err("all servers return error".into());
         }
         Ok(answer)

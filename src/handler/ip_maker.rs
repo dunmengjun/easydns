@@ -24,6 +24,9 @@ impl Handler for IpChoiceMaker {
     async fn handle(&self, clain: &mut Clain, query: DNSQuery) -> Result<DNSAnswer> {
         let mut answer = clain.next(query).await?;
         let ip_vec = answer.get_ip_vec();
+        if ip_vec.is_empty() {
+            return Ok(answer);
+        }
         if let Some(pinger) = self.pinger.as_ref() {
             if ip_vec.len() == 1 {
                 answer.retain_ip(ip_vec[0]);
