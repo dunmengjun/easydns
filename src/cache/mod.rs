@@ -89,6 +89,15 @@ impl CachePool {
         }
     }
 
+    fn to_file_bytes(&self) -> Vec<u8> {
+        let mut vec = Vec::new();
+        self.map.iter().for_each(|e| {
+            vec.extend(e.value().to_bytes());
+        });
+        vec.remove(vec.len() - 1);
+        vec
+    }
+
     pub async fn write_to_file(&self) -> Result<()> {
         if self.disabled {
             info!("缓存已禁用");
@@ -99,22 +108,9 @@ impl CachePool {
             return Ok(());
         }
         let mut file = File::create(&self.file_name).await?;
-        let vec: Vec<u8> = self.into();
-        file.write_all(vec.as_slice()).await?;
+        file.write_all(self.to_file_bytes().as_slice()).await?;
         info!("缓存全部写入了文件! 文件名称是{}", self.file_name);
         Ok(())
-    }
-}
-
-impl From<&CachePool> for Vec<u8> {
-    fn from(pool: &CachePool) -> Self {
-        let mut vec = Vec::new();
-        pool.map.iter().for_each(|e| {
-            let bytes: Vec<u8> = e.value().boxed_clone().into();
-            vec.extend(bytes);
-        });
-        vec.remove(vec.len() - 1);
-        vec
     }
 }
 
