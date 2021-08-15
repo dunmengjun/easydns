@@ -1,8 +1,7 @@
 use crate::cache::cache_record::{CacheItem, SOA_RECORD};
-use crate::cache::{F_DELIMITER, F_SPACE, CacheRecord};
+use crate::cache::{F_DELIMITER, F_SPACE};
 use crate::system::get_now;
 use crate::protocol::DNSAnswer;
-use std::ops::Deref;
 
 #[derive(Clone, PartialOrd, PartialEq, Debug)]
 pub struct SoaCacheRecord {
@@ -23,14 +22,6 @@ impl CacheItem for SoaCacheRecord {
 
     fn get_key(&self) -> &Vec<u8> {
         &self.domain
-    }
-
-    fn to_bytes(&self) -> Vec<u8> {
-        self.into()
-    }
-
-    fn to_answer(&self) -> DNSAnswer {
-        DNSAnswer::from(self)
     }
 }
 

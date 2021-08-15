@@ -29,8 +29,6 @@ pub trait CacheItem: Sync + Send + BoxedClone {
     fn get_create_time(&self) -> u128;
     fn get_ttl_ms(&self) -> u128;
     fn get_key(&self) -> &Vec<u8>;
-    fn to_bytes(&self) -> Vec<u8>;
-    fn to_answer(&self) -> DNSAnswer;
 }
 
 pub trait BoxedClone {
@@ -62,13 +60,13 @@ impl From<DNSAnswer> for CacheRecord {
 
 impl From<CacheRecord> for DNSAnswer {
     fn from(r: CacheRecord) -> Self {
-        r.to_answer()
+        r.into()
     }
 }
 
 impl From<CacheRecord> for Vec<u8> {
     fn from(r: CacheRecord) -> Self {
-        r.to_bytes()
+        r.into()
     }
 }
 
