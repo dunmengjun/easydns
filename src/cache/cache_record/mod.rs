@@ -50,28 +50,6 @@ impl GetOrdKey for CacheRecord {
     }
 }
 
-impl From<DNSAnswer> for CacheRecord {
-    fn from(answer: DNSAnswer) -> Self {
-        if !answer.is_empty_answers() {
-            Box::new(IpCacheRecord::from(answer))
-        } else {
-            Box::new(SoaCacheRecord::from(answer))
-        }
-    }
-}
-
-impl From<CacheRecord> for DNSAnswer {
-    fn from(r: CacheRecord) -> Self {
-        r.to_answer()
-    }
-}
-
-impl From<CacheRecord> for Vec<u8> {
-    fn from(r: CacheRecord) -> Self {
-        r.to_bytes()
-    }
-}
-
 #[cfg(test)]
 pub mod tests {
     pub use crate::cache::cache_record::ip_record::tests;

@@ -2,7 +2,7 @@ use std::fmt::{Debug};
 use crate::buffer::PacketBuffer;
 use std::net::{IpAddr, Ipv4Addr};
 use crate::system::{next_id, get_now};
-use crate::cache::{IpCacheRecord, SoaCacheRecord, CacheItem};
+use crate::cache::{IpCacheRecord, SoaCacheRecord, CacheItem, CacheRecord};
 
 const C_FACTOR: u8 = 192u8;
 const DC_FACTOR: u16 = 16383u16;
@@ -446,26 +446,6 @@ impl DNSAnswer {
         self.header.id = id;
     }
 
-    pub fn get_domain(&self) -> &Vec<u8> {
-        &self.questions[0].name
-    }
-
-    pub fn get_answer_ttl_secs(&self) -> u32 {
-        self.answers[0].ttl
-    }
-
-    pub fn get_auth_ttl_secs(&self) -> u32 {
-        self.authorities[0].ttl
-    }
-
-    pub fn get_auth_data(&self) -> &Vec<u8> {
-        &self.authorities[0].data
-    }
-
-    pub fn get_address(&self) -> &Vec<u8> {
-        &self.answers[0].data
-    }
-
     pub fn get_ip_vec(&self) -> Vec<IpAddr> {
         self.answers.iter().filter(|r| {
             r.is_a_record()
@@ -511,6 +491,24 @@ impl DNSAnswer {
 
     pub fn is_empty_answers(&self) -> bool {
         self.answers.is_empty()
+    }
+
+    pub fn to_cache(&self) -> CacheRecord {
+        if !self.is_empty_answers() {
+            Box::new(IpCacheRecord {
+                domain: self.questions[0].name.clone(),
+                address: self.answers[0].data.clone(),
+                create_time: get_now(),
+                ttl_ms: self.answers[0].ttl as u128 * 1000,
+            })
+        } else {
+            Box::new(SoaCacheRecord {
+                domain: self.questions[0].name.clone(),
+                data: self.authorities[0].data.clone(),
+                create_time: get_now(),
+                ttl_ms: self.authorities[0].ttl as u128 * 1000,
+            })
+        }
     }
 }
 

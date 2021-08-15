@@ -1,8 +1,7 @@
 use crate::cache::cache_record::{CacheItem, SOA_RECORD};
-use crate::cache::{F_DELIMITER, F_SPACE, CacheRecord};
+use crate::cache::{F_DELIMITER, F_SPACE};
 use crate::system::get_now;
 use crate::protocol::DNSAnswer;
-use std::ops::Deref;
 
 #[derive(Clone, PartialOrd, PartialEq, Debug)]
 pub struct SoaCacheRecord {
@@ -78,19 +77,6 @@ impl From<&[u8]> for SoaCacheRecord {
             data,
             create_time,
             ttl_ms,
-        }
-    }
-}
-
-impl From<DNSAnswer> for SoaCacheRecord {
-    fn from(answer: DNSAnswer) -> Self {
-        let x = answer.get_auth_data();
-        info!("{:?}", x);
-        SoaCacheRecord {
-            domain: answer.get_domain().clone(),
-            data: x.clone(),
-            create_time: get_now(),
-            ttl_ms: answer.get_auth_ttl_secs() as u128 * 1000,
         }
     }
 }

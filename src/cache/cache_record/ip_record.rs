@@ -1,8 +1,7 @@
-use crate::cache::{F_DELIMITER, F_SPACE, CacheRecord};
+use crate::cache::{F_DELIMITER, F_SPACE};
 use crate::system::{get_now};
 use crate::protocol::DNSAnswer;
 use crate::cache::cache_record::{CacheItem, IP_RECORD};
-use std::ops::Deref;
 
 #[derive(Clone, PartialOrd, PartialEq, Debug)]
 pub struct IpCacheRecord {
@@ -78,17 +77,6 @@ impl From<&[u8]> for IpCacheRecord {
             address,
             create_time,
             ttl_ms,
-        }
-    }
-}
-
-impl From<DNSAnswer> for IpCacheRecord {
-    fn from(answer: DNSAnswer) -> Self {
-        IpCacheRecord {
-            domain: answer.get_domain().clone(),
-            address: answer.get_address().clone(),
-            create_time: get_now(),
-            ttl_ms: answer.get_answer_ttl_secs() as u128 * 1000,
         }
     }
 }

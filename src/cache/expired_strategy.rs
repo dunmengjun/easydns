@@ -15,10 +15,10 @@ impl CacheStrategy for ExpiredCacheStrategy {
               get_value_fn: Box<dyn FnOnce() -> Result<DNSAnswer> + Send + 'static>) -> Result<DNSAnswer> {
         if record.is_expired(get_now()) {
             let answer = get_value_fn()?;
-            self.map.insert(key, answer.clone().into());
+            self.map.insert(key, (&answer).to_cache());
             Ok(answer)
         } else {
-            Ok(record.into())
+            Ok(record.to_answer())
         }
     }
 }
