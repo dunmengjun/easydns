@@ -52,7 +52,7 @@ impl HandlerContext {
         })
     }
 
-    pub async fn handle_task(&self, buffer: PacketBuffer) -> Result<DNSAnswer> {
+    pub async fn handle_query(&self, buffer: PacketBuffer) -> Result<DNSAnswer> {
         let mut query_clain = Clain::new();
         query_clain.add(DomainFilter::new(self.filter.clone()));
         query_clain.add(LegalChecker::new(self.server_group.clone()));

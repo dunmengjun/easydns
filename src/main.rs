@@ -38,7 +38,7 @@ async fn main() -> Result<()> {
                 let arc_client = client.clone();
                 let arc_handler = handler.clone();
                 tokio::spawn(async move {
-                    let answer = match arc_handler.handle_task(buffer).await {
+                    let answer = match arc_handler.handle_query(buffer).await {
                         Ok(answer) => answer,
                         Err(e) => {
                             error!("Handle query task error: {:?}", e);
