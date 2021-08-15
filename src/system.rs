@@ -137,7 +137,7 @@ pub fn setup_log_level(config: &Config) -> Result<()> {
 
 pub fn block_on<F: Future>(future: F) -> F::Output {
     tokio::task::block_in_place(move || {
-        Handle::current().block_on(async {
+        Handle::current().block_on(async move {
             future.await
         })
     })

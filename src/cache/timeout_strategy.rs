@@ -33,7 +33,7 @@ impl CacheStrategy for TimeoutCacheStrategy {
                     }
                 });
                 if cfg!(test) {
-                    crate::system::block_on(async {
+                    crate::system::block_on(async move {
                         _joiner.await.unwrap();
                     })
                 }
