@@ -85,16 +85,6 @@ impl HandlerContext {
     }
 }
 
-pub fn setup_exit_process_task(context: &HandlerContext) {
-    //创建任务去监听ctrl_c event
-    let cloned_cache_pool = context.cache_pool.clone();
-    tokio::spawn(async move {
-        tokio::signal::ctrl_c().await.expect("failed to listen for ctrl_c event");
-        cloned_cache_pool.exit_process_action().await.unwrap();
-        std::process::exit(0);
-    });
-}
-
 struct Clain {
     pub funcs: Vec<Box<dyn Handler>>,
 }

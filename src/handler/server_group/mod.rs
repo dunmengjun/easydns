@@ -17,21 +17,19 @@ pub trait ServerSender: Sync + Send {
 }
 
 pub struct ServerGroup {
-    servers: Vec<String>,
     server_sender: Box<dyn ServerSender>,
 }
 
 impl ServerGroup {
-    pub async fn from(servers: Vec<String>, strategy: usize, duration: u64) -> Result<Self> {
+    pub async fn from(servers: Vec<String>, strategy: usize, duration_secs: u64) -> Result<Self> {
         let query_executor = QueryExecutor::create().await?;
         let server_sender: Box<dyn ServerSender> = match strategy {
-            0 => Box::new(FastServerSender::from(query_executor, servers.clone(), duration)),
-            1 => Box::new(PreferServerSender::from(query_executor, servers.clone())),
-            2 => Box::new(CombineServerSender::from(query_executor, servers.clone())),
+            0 => Box::new(FastServerSender::from(query_executor, servers, duration_secs)),
+            1 => Box::new(PreferServerSender::from(query_executor, servers)),
+            2 => Box::new(CombineServerSender::from(query_executor, servers)),
             _ => panic!("不支持的server strategy类型！"),
         };
         Ok(ServerGroup {
-            servers,
             server_sender,
         })
     }

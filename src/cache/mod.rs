@@ -5,7 +5,7 @@ mod timeout_strategy;
 
 use crate::protocol::DNSAnswer;
 use crate::config::Config;
-use crate::system::{Result, get_now};
+use crate::system::{Result, get_now, block_on};
 use std::sync::Arc;
 use limit_map::{LimitedMap};
 use tokio::fs::File;
@@ -28,6 +28,19 @@ pub struct CachePool {
     strategy: Box<dyn CacheStrategy>,
     file_name: String,
     map: Arc<LimitedMap<Vec<u8>, DNSCacheRecord>>,
+}
+
+impl Drop for CachePool {
+    fn drop(&mut self) {
+        block_on(async move {
+            match self.write_to_file().await {
+                Ok(_) => {}
+                Err(e) => {
+                    error!("把缓存写入文件出错: {:?}", e)
+                }
+            }
+        });
+    }
 }
 
 impl CachePool {
@@ -80,7 +93,7 @@ impl CachePool {
         vec
     }
 
-    pub async fn exit_process_action(&self) -> Result<()> {
+    pub async fn write_to_file(&self) -> Result<()> {
         if self.disabled {
             info!("缓存已禁用");
             return Ok(());
@@ -91,7 +104,7 @@ impl CachePool {
         }
         let mut file = File::create(&self.file_name).await?;
         file.write_all(self.to_file_bytes().as_slice()).await?;
-        info!("缓存全部写入了文件! 文件名称是cache");
+        info!("缓存全部写入了文件! 文件名称是{}", self.file_name);
         Ok(())
     }
 }
@@ -126,6 +139,4 @@ fn create_map_by_vec_u8(config: &Config, file_vec: Vec<u8>) -> LimitedMap<Vec<u8
 }
 
 #[cfg(test)]
-mod tests {
-
-}
+mod tests {}

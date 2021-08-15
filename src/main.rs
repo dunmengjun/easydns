@@ -27,18 +27,24 @@ async fn main() -> Result<()> {
     let config = config::init_from_toml().await?;
     system::setup_log_level(&config)?;
     let handler = Arc::new(HandlerContext::from(config).await?);
-
-    setup_exit_process_task(&handler);
-
     //从客户端接受请求的主循环
     loop {
-        let (buffer, src) = handler.recv_query().await?;
-        let arc_handler = handler.clone();
-        tokio::spawn(async move {
-            match arc_handler.handle_task(src, buffer).await {
-                Ok(_) => {}
-                Err(e) => error!("error occur here main{:?}", e),
+        tokio::select! {
+            result = handler.recv_query() => {
+                let (buffer, src) = result?;
+                let arc_handler = handler.clone();
+                tokio::spawn(async move {
+                    match arc_handler.handle_task(src, buffer).await {
+                        Ok(_) => {}
+                        Err(e) => error!("error occur here main{:?}", e),
+                    }
+                });
+            },
+            //监听ctrl_c事件
+            _ = tokio::signal::ctrl_c() => {
+                break;
             }
-        });
+        }
     }
+    Ok(())
 }
