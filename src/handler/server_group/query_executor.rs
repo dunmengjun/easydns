@@ -6,6 +6,8 @@ use crate::system::{Result, next_id};
 use std::sync::Arc;
 use crate::buffer::PacketBuffer;
 use tokio::sync::oneshot;
+use tokio::time::timeout;
+use std::time::Duration;
 
 pub struct QueryExecutor {
     socket: Arc<UdpSocket>,
@@ -46,7 +48,14 @@ impl QueryExecutor {
         self.socket
             .send_to(query.to_u8_with_id(next_id).as_slice(), address)
             .await?;
-        let mut answer = receiver.await?;
+        let mut answer = match timeout(Duration::from_secs(3), receiver).await {
+            Ok(result) => {
+                result?
+            }
+            Err(_) => {
+                DNSAnswer::from_query_with_failure(query)
+            }
+        };
         self.reg_table.remove(answer.get_id());
         answer.set_id(query.get_id().clone());
         Ok(answer)

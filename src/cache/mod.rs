@@ -85,7 +85,9 @@ impl CachePool {
             //缓存中没有
             None => {
                 let answer = get_value_fn()?;
-                self.map.insert(key.clone(), (&answer).to_cache());
+                if let Some(r) = (&answer).to_cache() {
+                    self.map.insert(key.clone(), r);
+                }
                 Ok(answer)
             }
         }

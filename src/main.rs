@@ -16,6 +16,7 @@ mod system;
 mod handler;
 mod cache;
 mod client;
+mod cursor;
 
 #[macro_use]
 extern crate log;
@@ -46,7 +47,7 @@ async fn main() -> Result<()> {
                             return;
                         },
                     };
-                    info!("answer: {:?}", answer);
+                    info!("answer: {}", answer);
                     if let Err(e) = arc_client.back_to(src, answer).await {
                         error!("Send answer back to client error: {:?}", e)
                     }

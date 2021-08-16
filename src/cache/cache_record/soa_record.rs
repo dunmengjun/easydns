@@ -114,7 +114,7 @@ mod tests {
             t.borrow_mut().set_timestamp(0);
         });
 
-        let result = answer.to_cache();
+        let result = answer.to_cache().unwrap();
 
         let expected: CacheRecord = get_soa_record().into();
         assert!(expected.eq(&result))

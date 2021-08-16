@@ -13,7 +13,9 @@ impl CacheStrategy for ExpiredCacheStrategy {
     fn handle(&self, record: CacheRecord, get_value_fn: GetAnswerFunc) -> Result<DNSAnswer> {
         if record.is_expired(get_now()) {
             let answer = get_value_fn()?;
-            self.map.insert(record.get_key().clone(), (&answer).to_cache());
+            if let Some(r) = (&answer).to_cache() {
+                self.map.insert(record.get_key().clone(), r);
+            }
             Ok(answer)
         } else {
             Ok(record.to_answer())

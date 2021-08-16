@@ -1,8 +1,11 @@
-use std::fmt::{Debug};
+use std::fmt::{Debug, Display, Formatter};
 use crate::buffer::PacketBuffer;
 use std::net::{IpAddr, Ipv4Addr};
 use crate::system::{next_id, get_now};
 use crate::cache::{IpCacheRecord, SoaCacheRecord, CacheItem, CacheRecord};
+use tokio::io::AsyncReadExt;
+use crate::cursor::Cursor;
+use std::ops::{Deref, Add};
 
 const C_FACTOR: u8 = 192u8;
 const DC_FACTOR: u16 = 16383u16;
@@ -283,11 +286,14 @@ pub struct DNSAnswer {
 
 impl From<PacketBuffer> for DNSAnswer {
     fn from(mut buffer: PacketBuffer) -> Self {
-        let header = Header::from(&mut buffer);
+        let mut header = Header::from(&mut buffer);
         let mut questions = Vec::new();
         (0..header.question_count as usize).into_iter().for_each(|_| {
             questions.push(Question::from(&mut buffer));
         });
+        if header.answer_count == 0 && header.authority_count == 0 {
+            header.flags = 0x8182;
+        }
         let mut answers = Vec::new();
         (0..header.answer_count as usize).into_iter().for_each(|_| {
             answers.push(ResourceRecord::from(&mut buffer));
@@ -384,6 +390,28 @@ impl DNSAnswer {
                 additional_count: 0,
             },
             questions: query.questions.clone(),
+            answers: vec![],
+            authorities: vec![],
+        }
+    }
+
+    pub fn from_query_with_failure(query: &DNSQuery) -> Self {
+        let header = Header {
+            id: query.get_id().clone(),
+            flags: 0x8182,
+            question_count: 1,
+            answer_count: 0,
+            authority_count: 0,
+            additional_count: 0,
+        };
+        let question = Question {
+            name: query.get_domain().clone(),
+            _type: 1,
+            class: 1,
+        };
+        DNSAnswer {
+            header,
+            questions: vec![question],
             answers: vec![],
             authorities: vec![],
         }
@@ -493,8 +521,22 @@ impl DNSAnswer {
         self.answers.is_empty()
     }
 
-    pub fn to_cache(&self) -> CacheRecord {
-        if !self.is_empty_answers() {
+    pub fn is_server_failure(&self) -> bool {
+        self.header.flags == 0x8182
+    }
+
+    pub fn is_no_such_name(&self) -> bool {
+        self.header.flags == 0x8183
+    }
+
+    pub fn to_cache(&self) -> Option<CacheRecord> {
+        if self.is_server_failure() {
+            return None;
+        }
+        if self.is_no_such_name() {
+            return None;
+        }
+        let t: CacheRecord = if !self.is_empty_answers() {
             Box::new(IpCacheRecord {
                 domain: self.questions[0].name.clone(),
                 address: self.answers[0].data.clone(),
@@ -508,6 +550,48 @@ impl DNSAnswer {
                 create_time: get_now(),
                 ttl_ms: self.authorities[0].ttl as u128 * 1000,
             })
+        };
+        Some(t)
+    }
+
+    fn get_readable_domain(&self) -> String {
+        let vec = self.questions[0].name.clone();
+        let mut cursor = Cursor::<u8>::form(Box::new(vec));
+        let mut flag = cursor.take();
+        let mut buf = String::new();
+        while flag > 0 {
+            let str = cursor.take_slice(flag as usize);
+            let result = String::from_utf8(Vec::from(str)).unwrap();
+            buf.push_str(&result);
+            buf.push('.');
+            flag = cursor.take();
+        }
+        buf.remove(buf.len() - 1);
+        buf
+    }
+}
+
+fn to_ip_string(ips: &Vec<u8>) -> String {
+    let mut buf = String::new();
+    for i in ips {
+        buf.push(i.clone() as char);
+        buf.push('.');
+    }
+    buf.remove(buf.len() - 1);
+    buf
+}
+
+impl Display for DNSAnswer {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let domain = self.get_readable_domain();
+        if self.is_server_failure() {
+            write!(f, "(FAILURE, {})", domain)
+        } else if self.is_no_such_name() {
+            write!(f, "(NO_SUCH_NAME, {})", domain)
+        } else if !self.is_empty_answers() {
+            write!(f, "(IP, {}, {}, {:?})", domain, self.answers[0].ttl, self.answers[0].data)
+        } else {
+            write!(f, "(SOA, {}, {})", domain, self.authorities[0].ttl)
         }
     }
 }

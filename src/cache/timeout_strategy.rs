@@ -16,7 +16,9 @@ impl CacheStrategy for TimeoutCacheStrategy {
         let now = get_sub_now(Duration::from_millis(self.timeout as u64));
         if record.is_expired(now) {
             let answer = get_value_fn()?;
-            self.map.insert(record.get_key().clone(), (&answer).to_cache());
+            if let Some(r) = (&answer).to_cache() {
+                self.map.insert(record.get_key().clone(), r);
+            }
             Ok(answer)
         } else {
             if record.is_expired(get_now()) {
@@ -25,7 +27,9 @@ impl CacheStrategy for TimeoutCacheStrategy {
                 let _joiner = tokio::spawn(async move {
                     match get_value_fn() {
                         Ok(answer) => {
-                            cloned_map.insert(key, answer.to_cache());
+                            if let Some(r) = (&answer).to_cache() {
+                                cloned_map.insert(key, r);
+                            }
                         }
                         Err(e) => {
                             error!("{}", e);
