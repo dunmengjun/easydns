@@ -1,6 +1,5 @@
-use crate::cache::limit_map::LimitedMap;
 use std::sync::Arc;
-use crate::cache::{CacheStrategy};
+use crate::cache::{CacheStrategy, GetAnswerFunc, CacheMap};
 use crate::protocol::DNSAnswer;
 use crate::system::{get_sub_now, get_now};
 use std::time::Duration;
@@ -8,21 +7,21 @@ use crate::system::Result;
 use crate::cache::cache_record::{CacheRecord};
 
 pub struct TimeoutCacheStrategy {
-    map: Arc<LimitedMap<Vec<u8>, CacheRecord>>,
+    map: Arc<CacheMap>,
     timeout: u128,
 }
 
 impl CacheStrategy for TimeoutCacheStrategy {
-    fn handle(&self, key: Vec<u8>, record: CacheRecord,
-              get_value_fn: Box<dyn FnOnce() -> Result<DNSAnswer> + Send + 'static>) -> Result<DNSAnswer> {
+    fn handle(&self, record: CacheRecord, get_value_fn: GetAnswerFunc) -> Result<DNSAnswer> {
         let now = get_sub_now(Duration::from_millis(self.timeout as u64));
         if record.is_expired(now) {
             let answer = get_value_fn()?;
-            self.map.insert(key, (&answer).to_cache());
+            self.map.insert(record.get_key().clone(), (&answer).to_cache());
             Ok(answer)
         } else {
             if record.is_expired(get_now()) {
                 let cloned_map = self.map.clone();
+                let key = record.get_key().clone();
                 let _joiner = tokio::spawn(async move {
                     match get_value_fn() {
                         Ok(answer) => {
@@ -47,7 +46,7 @@ impl CacheStrategy for TimeoutCacheStrategy {
 }
 
 impl TimeoutCacheStrategy {
-    pub fn from(map: Arc<LimitedMap<Vec<u8>, CacheRecord>>, timeout: u128) -> Self {
+    pub fn from(map: Arc<CacheMap>, timeout: u128) -> Self {
         TimeoutCacheStrategy {
             map,
             timeout,

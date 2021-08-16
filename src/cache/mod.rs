@@ -23,16 +23,19 @@ use crate::cache::cache_record::SOA_RECORD;
 const F_DELIMITER: u8 = '|' as u8;
 const F_SPACE: u8 = ' ' as u8;
 
+pub type GetAnswerFunc = Box<dyn FnOnce() -> Result<DNSAnswer> + Send + 'static>;
+pub type CacheMap = LimitedMap<Vec<u8>, CacheRecord>;
+type ExpiredStrategy = Box<dyn CacheStrategy>;
+
 pub trait CacheStrategy: Send + Sync {
-    fn handle(&self, key: Vec<u8>, record: CacheRecord,
-              get_value_fn: Box<dyn FnOnce() -> Result<DNSAnswer> + Send + 'static>) -> Result<DNSAnswer>;
+    fn handle(&self, record: CacheRecord, get_value_fn: GetAnswerFunc) -> Result<DNSAnswer>;
 }
 
 pub struct CachePool {
     disabled: bool,
-    strategy: Box<dyn CacheStrategy>,
+    strategy: ExpiredStrategy,
     file_name: String,
-    map: Arc<LimitedMap<Vec<u8>, CacheRecord>>,
+    map: Arc<CacheMap>,
 }
 
 impl Drop for CachePool {
@@ -50,12 +53,12 @@ impl Drop for CachePool {
 
 impl CachePool {
     pub async fn from(config: &Config) -> Result<Self> {
-        let limit_map: Arc<LimitedMap<Vec<u8>, CacheRecord>> = Arc::new(if config.cache_on {
+        let limit_map: Arc<CacheMap> = Arc::new(if config.cache_on {
             create_map_by_config(config).await?
         } else {
             LimitedMap::from(0)
         });
-        let strategy: Box<dyn CacheStrategy> = if config.cache_get_strategy == 0 {
+        let strategy: ExpiredStrategy = if config.cache_get_strategy == 0 {
             Box::new(ExpiredCacheStrategy::from(limit_map.clone()))
         } else {
             Box::new(TimeoutCacheStrategy::from(limit_map.clone(),
@@ -68,8 +71,7 @@ impl CachePool {
             map: limit_map,
         })
     }
-    pub fn get(&self, key: &Vec<u8>, get_value_fn: impl FnOnce() -> Result<DNSAnswer> + Send + 'static)
-               -> Result<DNSAnswer> {
+    pub fn get(&self, key: &Vec<u8>, get_value_fn: GetAnswerFunc) -> Result<DNSAnswer> {
         //如果缓存被禁用
         if self.disabled {
             return get_value_fn();
@@ -78,7 +80,7 @@ impl CachePool {
         match self.map.get(key) {
             //缓存中有
             Some(r) => {
-                self.strategy.handle(key.clone(), r.boxed_clone(), Box::new(get_value_fn))
+                self.strategy.handle(r.boxed_clone(), get_value_fn)
             }
             //缓存中没有
             None => {
@@ -114,7 +116,7 @@ impl CachePool {
     }
 }
 
-async fn create_map_by_config(config: &Config) -> Result<LimitedMap<Vec<u8>, CacheRecord>> {
+async fn create_map_by_config(config: &Config) -> Result<CacheMap> {
     Ok(match File::open(&config.cache_file).await {
         Ok(mut file) => {
             let mut file_vec = Vec::new();
@@ -131,7 +133,7 @@ async fn create_map_by_config(config: &Config) -> Result<LimitedMap<Vec<u8>, Cac
     })
 }
 
-fn create_map_by_vec_u8(config: &Config, file_vec: Vec<u8>) -> LimitedMap<Vec<u8>, CacheRecord> {
+fn create_map_by_vec_u8(config: &Config, file_vec: Vec<u8>) -> CacheMap {
     let map = LimitedMap::from(config.cache_num);
     let split = file_vec.as_slice().split(|e| F_SPACE == *e);
     for r_bytes in split {

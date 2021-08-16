@@ -23,11 +23,12 @@ impl Handler for CacheHandler {
     async fn handle(&self, clain: &mut Clain, query: DNSQuery) -> Result<DNSAnswer> {
         let mut temp_chain = clain.clone();
         let cloned_query = query.clone();
-        let result = self.cache_pool.get(query.get_domain(), || {
-            block_on(async move {
-                temp_chain.next(cloned_query).await
-            })
-        });
+        let result = self.cache_pool
+            .get(query.get_domain(), Box::new(|| {
+                block_on(async move {
+                    temp_chain.next(cloned_query).await
+                })
+            }));
         result.map(|mut r| {
             r.set_id(query.get_id().clone());
             r

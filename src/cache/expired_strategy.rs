@@ -1,5 +1,4 @@
-use crate::cache::limit_map::LimitedMap;
-use crate::cache::{CacheStrategy};
+use crate::cache::{CacheStrategy, GetAnswerFunc, CacheMap};
 use std::sync::Arc;
 use crate::protocol::DNSAnswer;
 use crate::system::get_now;
@@ -7,15 +6,14 @@ use crate::system::Result;
 use crate::cache::cache_record::{CacheRecord};
 
 pub struct ExpiredCacheStrategy {
-    map: Arc<LimitedMap<Vec<u8>, CacheRecord>>,
+    map: Arc<CacheMap>,
 }
 
 impl CacheStrategy for ExpiredCacheStrategy {
-    fn handle(&self, key: Vec<u8>, record: CacheRecord,
-              get_value_fn: Box<dyn FnOnce() -> Result<DNSAnswer> + Send + 'static>) -> Result<DNSAnswer> {
+    fn handle(&self, record: CacheRecord, get_value_fn: GetAnswerFunc) -> Result<DNSAnswer> {
         if record.is_expired(get_now()) {
             let answer = get_value_fn()?;
-            self.map.insert(key, (&answer).to_cache());
+            self.map.insert(record.get_key().clone(), (&answer).to_cache());
             Ok(answer)
         } else {
             Ok(record.to_answer())
@@ -24,7 +22,7 @@ impl CacheStrategy for ExpiredCacheStrategy {
 }
 
 impl ExpiredCacheStrategy {
-    pub fn from(map: Arc<LimitedMap<Vec<u8>, CacheRecord>>) -> Self {
+    pub fn from(map: Arc<CacheMap>) -> Self {
         ExpiredCacheStrategy {
             map
         }
