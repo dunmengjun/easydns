@@ -1,7 +1,7 @@
-use crate::cache::{F_DELIMITER};
 use crate::system::{get_now};
 use crate::protocol::DNSAnswer;
 use crate::cache::cache_record::{CacheItem, IP_RECORD};
+use crate::cursor::Cursor;
 
 #[derive(Clone, PartialOrd, PartialEq, Debug)]
 pub struct IpCacheRecord {
@@ -42,15 +42,14 @@ impl IpCacheRecord {
 impl From<&IpCacheRecord> for Vec<u8> {
     fn from(record: &IpCacheRecord) -> Self {
         let mut vec = Vec::<u8>::new();
-        //插入魔数
-        vec.push(IP_RECORD);
-        vec.push(F_DELIMITER);
+        vec.push(IP_RECORD);//插入魔数
+        vec.push(record.domain.len() as u8);
         vec.extend(&record.domain);
-        vec.push(F_DELIMITER);
+        vec.push(4);
         vec.extend(&(record.get_remain_time(get_now()) as u32).to_be_bytes());
-        vec.push(F_DELIMITER);
+        vec.push(16);
         vec.extend(&record.create_time.to_be_bytes());
-        vec.push(F_DELIMITER);
+        vec.push(record.address.len() as u8);
         vec.extend(&record.address);
         vec
     }
@@ -58,19 +57,16 @@ impl From<&IpCacheRecord> for Vec<u8> {
 
 impl From<&[u8]> for IpCacheRecord {
     fn from(bytes: &[u8]) -> Self {
-        let split: Vec<&[u8]> = bytes.split(|e| F_DELIMITER == *e).collect();
-        let domain = Vec::<u8>::from(split[1]);
-        let mut buf = [0u8; 4];
-        for i in 0..4 {
-            buf[i] = split[2][i]
-        }
-        let ttl_ms = u32::from_be_bytes(buf) as u128;
-        let mut buf = [0u8; 16];
-        for i in 0..16 {
-            buf[i] = split[3][i];
-        }
-        let create_time = u128::from_be_bytes(buf);
-        let address = Vec::<u8>::from(split[4]);
+        let mut cursor = Cursor::form(Vec::from(bytes).into());
+        cursor.take(); //删掉魔数
+        let mut len = cursor.take() as usize;
+        let domain = Vec::from(cursor.take_slice(len));
+        cursor.take();
+        let ttl_ms = u32::from_be_bytes(cursor.take_bytes()) as u128;
+        cursor.take();
+        let create_time = u128::from_be_bytes(cursor.take_bytes());
+        len = cursor.take() as usize;
+        let address = Vec::from(cursor.take_slice(len));
         IpCacheRecord {
             domain,
             address,
@@ -122,7 +118,7 @@ pub mod tests {
     }
 
     fn get_test_bytes() -> Vec<u8> {
-        let bytes: [u8; 44] = [42, 124, 3, 119, 119, 119, 5, 98, 97, 105, 100, 117, 3, 99, 111, 109, 0, 124, 0, 0, 3, 232, 124, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 124, 1, 1, 1, 1];
+        let bytes: [u8; 44] = [42, 15, 3, 119, 119, 119, 5, 98, 97, 105, 100, 117, 3, 99, 111, 109, 0, 4, 0, 0, 3, 232, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 1, 1, 1, 1];
         let mut vec = Vec::with_capacity(44);
         for c in bytes.iter() {
             vec.push(c.clone())

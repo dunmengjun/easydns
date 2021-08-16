@@ -1,25 +1,19 @@
+mod array_buf;
+
+pub type ArrayBuf<R> = Box<dyn Array<R>>;
+
 pub struct Cursor<R> {
-    array: Box<dyn Array<R>>,
+    array: ArrayBuf<R>,
     current: usize,
 }
 
-pub trait Array<T> {
+pub trait Array<T>: Send + Sync {
     fn get(&self, index: usize) -> T;
     fn get_slice(&self, start: usize, end: usize) -> &[T];
 }
 
-impl<T> Array<T> for Vec<T> where T: Clone + Copy {
-    fn get(&self, index: usize) -> T {
-        self[index]
-    }
-
-    fn get_slice(&self, start: usize, end: usize) -> &[T] {
-        &self[start..end]
-    }
-}
-
 impl<R> Cursor<R> {
-    pub fn form(array: Box<dyn Array<R>>) -> Self {
+    pub fn form(array: ArrayBuf<R>) -> Self {
         Cursor {
             array,
             current: 0,
@@ -60,5 +54,13 @@ impl<R> Cursor<R> {
         let result = self.array.get_slice(self.current, self.current + len);
         self.current += len;
         result
+    }
+
+    pub fn take_bytes<const N: usize>(&mut self) -> [R; N] where R: Default + Copy {
+        let mut k = [R::default(); N];
+        (0..N).into_iter().for_each(|index| {
+            k[index] = self.take();
+        });
+        k
     }
 }

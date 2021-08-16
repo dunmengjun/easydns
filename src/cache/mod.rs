@@ -19,9 +19,7 @@ use crate::cache::expired_strategy::ExpiredCacheStrategy;
 use crate::cache::timeout_strategy::TimeoutCacheStrategy;
 use crate::cache::cache_record::IP_RECORD;
 use crate::cache::cache_record::SOA_RECORD;
-
-const F_DELIMITER: u8 = '|' as u8;
-const F_SPACE: u8 = ' ' as u8;
+use crate::cursor::Cursor;
 
 pub type GetAnswerFunc = Box<dyn FnOnce() -> Result<DNSAnswer> + Send + 'static>;
 pub type CacheMap = LimitedMap<Vec<u8>, CacheRecord>;
@@ -96,10 +94,11 @@ impl CachePool {
     fn to_file_bytes(&self) -> Vec<u8> {
         let mut vec = Vec::new();
         self.map.iter().for_each(|e| {
-            vec.extend(e.value().to_bytes());
-            vec.push(F_SPACE);
+            let bytes = e.value().to_bytes();
+            vec.push(bytes.len() as u8);
+            vec.extend(bytes);
         });
-        vec.remove(vec.len() - 1);
+        vec.push(0);
         vec
     }
 
@@ -138,14 +137,16 @@ async fn create_map_by_config(config: &Config) -> Result<CacheMap> {
 
 fn create_map_by_vec_u8(config: &Config, file_vec: Vec<u8>) -> CacheMap {
     let map = LimitedMap::from(config.cache_num);
-    let split = file_vec.as_slice().split(|e| F_SPACE == *e);
-    for r_bytes in split {
-        let record = match r_bytes[0] {
+    let mut cursor = Cursor::form(file_vec.into());
+    let mut len = cursor.take() as usize;
+    while len > 0 {
+        let flag = cursor.peek();
+        let record = match flag {
             IP_RECORD => {
-                CacheRecord::from(IpCacheRecord::from(r_bytes))
+                CacheRecord::from(IpCacheRecord::from(cursor.take_slice(len)))
             }
             SOA_RECORD => {
-                CacheRecord::from(SoaCacheRecord::from(r_bytes))
+                CacheRecord::from(SoaCacheRecord::from(cursor.take_slice(len)))
             }
             _ => {
                 panic!("Unsupported cache record!");
@@ -154,6 +155,7 @@ fn create_map_by_vec_u8(config: &Config, file_vec: Vec<u8>) -> CacheMap {
         if !record.is_expired(get_now()) {
             map.insert(record.get_key().clone(), record);
         }
+        len = cursor.take() as usize;
     }
     map
 }

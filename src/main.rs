@@ -1,4 +1,5 @@
 #![feature(panic_info_message)]
+#![feature(const_generics)]
 
 use std::sync::Arc;
 
@@ -8,7 +9,6 @@ use crate::handler::*;
 use crate::system::{Result};
 use crate::client::ClientSocket;
 
-mod buffer;
 mod config;
 mod filter;
 mod protocol;
@@ -36,11 +36,11 @@ async fn main() -> Result<()> {
     loop {
         tokio::select! {
             result = client.recv() => {
-                let (buffer, src) = result?;
+                let (cursor, src) = result?;
                 let arc_client = client.clone();
                 let arc_handler = handler.clone();
                 tokio::spawn(async move {
-                    let answer = match arc_handler.handle_query(buffer).await {
+                    let answer = match arc_handler.handle_query(cursor).await {
                         Ok(answer) => answer,
                         Err(e) => {
                             error!("Handle query task error: {:?}", e);

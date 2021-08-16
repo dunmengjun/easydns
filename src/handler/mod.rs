@@ -3,7 +3,6 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use tokio_icmp::Pinger;
 
-use crate::buffer::PacketBuffer;
 use crate::cache::CachePool;
 use crate::config::Config;
 use crate::filter::Filter;
@@ -15,6 +14,7 @@ use crate::handler::query_sender::QuerySender;
 use crate::protocol::{DNSAnswer, DNSQuery};
 use crate::system::Result;
 use crate::handler::server_group::ServerGroup;
+use crate::cursor::Cursor;
 
 mod legal_checker;
 mod cache_handler;
@@ -52,14 +52,14 @@ impl HandlerContext {
         })
     }
 
-    pub async fn handle_query(&self, buffer: PacketBuffer) -> Result<DNSAnswer> {
+    pub async fn handle_query(&self, cursor: Cursor<u8>) -> Result<DNSAnswer> {
         let mut query_clain = Clain::new();
         query_clain.add(DomainFilter::new(self.filter.clone()));
         query_clain.add(LegalChecker::new(self.server_group.clone()));
         query_clain.add(CacheHandler::new(self.cache_pool.clone()));
         query_clain.add(IpChoiceMaker::new(self.pinger.clone()));
         query_clain.add(QuerySender::new(self.server_group.clone()));
-        query_clain.next(DNSQuery::from(buffer)).await
+        query_clain.next(DNSQuery::from(cursor)).await
     }
 }
 

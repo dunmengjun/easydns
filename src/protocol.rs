@@ -1,11 +1,8 @@
 use std::fmt::{Debug, Display, Formatter};
-use crate::buffer::PacketBuffer;
 use std::net::{IpAddr, Ipv4Addr};
 use crate::system::{next_id, get_now};
 use crate::cache::{IpCacheRecord, SoaCacheRecord, CacheItem, CacheRecord};
-use tokio::io::AsyncReadExt;
 use crate::cursor::Cursor;
-use std::ops::{Deref, Add};
 
 const C_FACTOR: u8 = 192u8;
 const DC_FACTOR: u16 = 16383u16;
@@ -13,25 +10,25 @@ const DC_FACTOR: u16 = 16383u16;
 const QUERY_ONLY_RECURSIVELY: u16 = 0x0100;
 const QUERY_RECURSIVELY_AD: u16 = 0x0120;
 
-fn parse_name(buffer: &mut PacketBuffer, name_vec: &mut Vec<u8>) {
-    if buffer.peek() & C_FACTOR == C_FACTOR {
-        let c_index = u16::from_be_bytes([buffer.take(), buffer.take()]);
-        buffer.tmp_at((c_index & DC_FACTOR) as usize, |buf| {
+fn parse_name(cursor: &mut Cursor<u8>, name_vec: &mut Vec<u8>) {
+    if cursor.peek() & C_FACTOR == C_FACTOR {
+        let c_index = u16::from_be_bytes([cursor.take(), cursor.take()]);
+        cursor.tmp_at((c_index & DC_FACTOR) as usize, |buf| {
             parse_name(buf, name_vec);
         })
     } else {
-        let seg_len = buffer.peek();
+        let seg_len = cursor.peek();
         if seg_len > 0 {
-            let segment = buffer.take_slice(seg_len as usize + 1);
+            let segment = cursor.take_slice(seg_len as usize + 1);
             name_vec.extend(segment);
-            parse_name(buffer, name_vec)
+            parse_name(cursor, name_vec)
         } else {
-            name_vec.push(buffer.take());
+            name_vec.push(cursor.take());
         }
     };
 }
 
-fn unzip_domain(cursor: &mut PacketBuffer) -> Vec<u8> {
+fn unzip_domain(cursor: &mut Cursor<u8>) -> Vec<u8> {
     let mut domain_vec = Vec::new();
     parse_name(cursor, &mut domain_vec);
     domain_vec
@@ -61,16 +58,16 @@ impl Header {
         result.extend(&self.additional_count.to_be_bytes());
         result
     }
-    fn from(buffer: &mut PacketBuffer) -> Self {
+    fn from(cursor: &mut Cursor<u8>) -> Self {
         let header = Header {
-            id: u16::from_be_bytes([buffer.take(), buffer.take()]),
-            flags: u16::from_be_bytes([buffer.take(), buffer.take()]),
-            question_count: u16::from_be_bytes([buffer.take(), buffer.take()]),
-            answer_count: u16::from_be_bytes([buffer.take(), buffer.take()]),
-            authority_count: u16::from_be_bytes([buffer.take(), buffer.take()]),
+            id: u16::from_be_bytes([cursor.take(), cursor.take()]),
+            flags: u16::from_be_bytes([cursor.take(), cursor.take()]),
+            question_count: u16::from_be_bytes([cursor.take(), cursor.take()]),
+            answer_count: u16::from_be_bytes([cursor.take(), cursor.take()]),
+            authority_count: u16::from_be_bytes([cursor.take(), cursor.take()]),
             additional_count: 0,
         };
-        buffer.move_to(2);
+        cursor.move_to(2);
         header
     }
 
@@ -104,10 +101,10 @@ impl Question {
         result
     }
 
-    fn from(buffer: &mut PacketBuffer) -> Self {
-        let name = unzip_domain(buffer);
-        let _type = u16::from_be_bytes([buffer.take(), buffer.take()]);
-        let class = u16::from_be_bytes([buffer.take(), buffer.take()]);
+    fn from(cursor: &mut Cursor<u8>) -> Self {
+        let name = unzip_domain(cursor);
+        let _type = u16::from_be_bytes([cursor.take(), cursor.take()]);
+        let class = u16::from_be_bytes([cursor.take(), cursor.take()]);
         Question {
             name,
             _type,
@@ -133,11 +130,11 @@ pub struct DNSQuery {
 }
 
 impl DNSQuery {
-    pub fn from(mut buffer: PacketBuffer) -> Self {
-        let header = Header::from(&mut buffer);
+    pub fn from(mut cursor: Cursor<u8>) -> Self {
+        let header = Header::from(&mut cursor);
         let mut questions = Vec::new();
         (0..header.question_count as usize).into_iter().for_each(|_| {
-            questions.push(Question::from(&mut buffer));
+            questions.push(Question::from(&mut cursor));
         });
         DNSQuery {
             header,
@@ -228,27 +225,27 @@ struct ResourceRecord {
 }
 
 impl ResourceRecord {
-    fn from(buffer: &mut PacketBuffer) -> Self {
-        let question = Question::from(buffer);
-        let ttl = u32::from_be_bytes([buffer.take(),
-            buffer.take(), buffer.take(), buffer.take()]);
-        let data_len = u16::from_be_bytes([buffer.take(), buffer.take()]);
+    fn from(cursor: &mut Cursor<u8>) -> Self {
+        let question = Question::from(cursor);
+        let ttl = u32::from_be_bytes([cursor.take(),
+            cursor.take(), cursor.take(), cursor.take()]);
+        let data_len = u16::from_be_bytes([cursor.take(), cursor.take()]);
         let data = if question._type == 5 {
             //说明是cname类型
-            unzip_domain(buffer)
+            unzip_domain(cursor)
         } else if question._type == 6 {
             //soa类型
-            let old_index = buffer.get_current_index();
+            let old_index = cursor.get_current_index();
             let mut vec = Vec::new();
-            vec.extend(unzip_domain(buffer));
-            vec.extend(unzip_domain(buffer));
-            let current_index = buffer.get_current_index();
+            vec.extend(unzip_domain(cursor));
+            vec.extend(unzip_domain(cursor));
+            let current_index = cursor.get_current_index();
             let len = current_index - old_index;
-            let remained_slice = buffer.take_slice(data_len as usize - len);
+            let remained_slice = cursor.take_slice(data_len as usize - len);
             vec.extend(remained_slice);
             vec
         } else {
-            Vec::<u8>::from(buffer.take_slice(data_len as usize))
+            Vec::<u8>::from(cursor.take_slice(data_len as usize))
         };
         ResourceRecord {
             name: question.name,
@@ -284,23 +281,23 @@ pub struct DNSAnswer {
     authorities: Vec<ResourceRecord>,
 }
 
-impl From<PacketBuffer> for DNSAnswer {
-    fn from(mut buffer: PacketBuffer) -> Self {
-        let mut header = Header::from(&mut buffer);
+impl From<Cursor<u8>> for DNSAnswer {
+    fn from(mut cursor: Cursor<u8>) -> Self {
+        let mut header = Header::from(&mut cursor);
         let mut questions = Vec::new();
         (0..header.question_count as usize).into_iter().for_each(|_| {
-            questions.push(Question::from(&mut buffer));
+            questions.push(Question::from(&mut cursor));
         });
         if header.answer_count == 0 && header.authority_count == 0 {
             header.flags = 0x8182;
         }
         let mut answers = Vec::new();
         (0..header.answer_count as usize).into_iter().for_each(|_| {
-            answers.push(ResourceRecord::from(&mut buffer));
+            answers.push(ResourceRecord::from(&mut cursor));
         });
         let mut authorities = Vec::new();
         (0..header.authority_count as usize).into_iter().for_each(|_| {
-            authorities.push(ResourceRecord::from(&mut buffer))
+            authorities.push(ResourceRecord::from(&mut cursor))
         });
         DNSAnswer {
             header,
@@ -569,16 +566,6 @@ impl DNSAnswer {
         buf.remove(buf.len() - 1);
         buf
     }
-}
-
-fn to_ip_string(ips: &Vec<u8>) -> String {
-    let mut buf = String::new();
-    for i in ips {
-        buf.push(i.clone() as char);
-        buf.push('.');
-    }
-    buf.remove(buf.len() - 1);
-    buf
 }
 
 impl Display for DNSAnswer {

@@ -1,8 +1,8 @@
 use tokio::net::UdpSocket;
-use crate::buffer::PacketBuffer;
 use std::net::SocketAddr;
 use crate::system::Result;
 use crate::protocol::DNSAnswer;
+use crate::cursor::{Cursor, ArrayBuf};
 
 pub struct ClientSocket {
     socket: UdpSocket,
@@ -15,12 +15,12 @@ impl ClientSocket {
             socket
         })
     }
-    pub async fn recv(&self) -> Result<(PacketBuffer, SocketAddr)> {
-        let mut buffer = PacketBuffer::new();
+    pub async fn recv(&self) -> Result<(Cursor<u8>, SocketAddr)> {
+        let mut buf = [0u8; 256];
         let (_, src) = self.socket
-            .recv_from(buffer.as_mut_slice())
+            .recv_from(&mut buf)
             .await?;
-        Ok((buffer, src))
+        Ok((Cursor::form(ArrayBuf::from(buf)), src))
     }
 
     pub async fn back_to(&self, client: SocketAddr, answer: DNSAnswer) -> Result<()> {
