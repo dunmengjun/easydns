@@ -1,4 +1,4 @@
-use crate::cache::{F_DELIMITER, F_SPACE};
+use crate::cache::{F_DELIMITER};
 use crate::system::{get_now};
 use crate::protocol::DNSAnswer;
 use crate::cache::cache_record::{CacheItem, IP_RECORD};
@@ -52,7 +52,6 @@ impl From<&IpCacheRecord> for Vec<u8> {
         vec.extend(&record.create_time.to_be_bytes());
         vec.push(F_DELIMITER);
         vec.extend(&record.address);
-        vec.push(F_SPACE);
         vec
     }
 }
@@ -83,10 +82,10 @@ impl From<&[u8]> for IpCacheRecord {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::cache::{DNSCacheRecord, IpCacheRecord, CacheItem, CacheRecord};
+    use crate::cache::{IpCacheRecord, CacheItem, CacheRecord};
     use crate::system::{TIME, get_now};
     use crate::cache::limit_map::GetOrdKey;
-    use crate::protocol::tests::get_valid_answer;
+    use crate::protocol::tests::get_ip_answer;
 
     #[test]
     fn should_return_true_when_check_expired_given_expired() {
@@ -131,13 +130,13 @@ pub mod tests {
 
         let result = IpCacheRecord::from(valid_bytes);
 
-        let expected = get_valid_record();
+        let expected = get_ip_record();
         assert_eq!(expected, result)
     }
 
     #[test]
     fn should_return_bytes_when_to_from_bytes_given_valid_bytes() {
-        let record = get_valid_record();
+        let record = get_ip_record();
 
         let result = record.to_bytes();
 
@@ -159,27 +158,27 @@ pub mod tests {
 
     #[test]
     fn should_return_valid_record_when_from_answer_given_valid_answer() {
-        let answer = get_valid_answer();
+        let answer = get_ip_answer();
         TIME.with(|t| {
             t.borrow_mut().set_timestamp(0);
         });
 
-        let result = IpCacheRecord::from(answer);
+        let result = answer.to_cache();
 
-        let expected = get_valid_record();
-        assert_eq!(expected, result)
+        let expected: CacheRecord = get_ip_record().into();
+        assert!(expected.eq(&result))
     }
 
     fn get_test_bytes() -> Vec<u8> {
-        let bytes: [u8; 43] = [3, 119, 119, 119, 5, 98, 97, 105, 100, 117, 3, 99, 111, 109, 0, 124, 1, 1, 1, 1, 124, 0, 0, 3, 232, 124, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 32];
-        let mut vec = Vec::with_capacity(43);
+        let bytes: [u8; 44] = [42, 124, 3, 119, 119, 119, 5, 98, 97, 105, 100, 117, 3, 99, 111, 109, 0, 124, 0, 0, 3, 232, 124, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 124, 1, 1, 1, 1];
+        let mut vec = Vec::with_capacity(44);
         for c in bytes.iter() {
             vec.push(c.clone())
         }
         vec
     }
 
-    pub fn get_valid_record() -> IpCacheRecord {
+    pub fn get_ip_record() -> IpCacheRecord {
         IpCacheRecord {
             domain: vec![3, 119, 119, 119, 5, 98, 97, 105, 100, 117, 3, 99, 111, 109, 0],
             address: vec![1, 1, 1, 1],
@@ -188,8 +187,8 @@ pub mod tests {
         }
     }
 
-    pub fn build_valid_record(f: fn(&mut IpCacheRecord)) -> IpCacheRecord {
-        let mut record = get_valid_record();
+    pub fn build_ip_record(f: fn(&mut IpCacheRecord)) -> IpCacheRecord {
+        let mut record = get_ip_record();
         f(&mut record);
         record
     }

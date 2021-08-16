@@ -516,7 +516,7 @@ impl DNSAnswer {
 pub mod tests {
     use crate::protocol::{DNSAnswer, ResourceRecord, Header, Question};
 
-    pub fn get_valid_answer() -> DNSAnswer {
+    pub fn get_ip_answer() -> DNSAnswer {
         let question = Question {
             name: vec![3, 119, 119, 119, 5, 98, 97, 105, 100, 117, 3, 99, 111, 109, 0],
             _type: 1,
@@ -545,7 +545,7 @@ pub mod tests {
         }
     }
 
-    pub fn get_valid_answer_with_ttl(ttl: u32) -> DNSAnswer {
+    pub fn get_ip_answer_with_ttl(ttl: u32) -> DNSAnswer {
         let question = Question {
             name: vec![3, 119, 119, 119, 5, 98, 97, 105, 100, 117, 3, 99, 111, 109, 0],
             _type: 1,

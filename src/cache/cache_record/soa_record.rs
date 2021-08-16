@@ -1,5 +1,5 @@
 use crate::cache::cache_record::{CacheItem, SOA_RECORD};
-use crate::cache::{F_DELIMITER, F_SPACE};
+use crate::cache::{F_DELIMITER};
 use crate::system::get_now;
 use crate::protocol::DNSAnswer;
 
@@ -52,7 +52,6 @@ impl From<&SoaCacheRecord> for Vec<u8> {
         vec.extend(&record.create_time.to_be_bytes());
         vec.push(F_DELIMITER);
         vec.extend(&record.data);
-        vec.push(F_SPACE);
         vec
     }
 }

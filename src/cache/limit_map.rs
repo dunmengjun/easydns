@@ -120,10 +120,10 @@ mod tests {
         let map = LimitedMap::from(1);
         map.records.insert(1, 1);
 
-        let result = map.get(&1);
+        let result = map.get(&1).unwrap().value().clone();
 
 
-        assert_eq!(1, result.unwrap().value().clone())
+        assert_eq!(1, result)
     }
 
     #[test]

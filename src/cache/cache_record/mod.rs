@@ -7,6 +7,7 @@ use crate::cache::limit_map::GetOrdKey;
 
 pub use ip_record::IpCacheRecord;
 pub use soa_record::SoaCacheRecord;
+use std::fmt::{Debug, Formatter};
 
 pub type CacheRecord = Box<dyn CacheItem>;
 
@@ -43,10 +44,41 @@ impl<T> BoxedClone for T where T: 'static + Clone + CacheItem {
     }
 }
 
+impl Clone for CacheRecord {
+    fn clone(&self) -> Self {
+        self.boxed_clone()
+    }
+}
+
 impl GetOrdKey for CacheRecord {
     type Output = u128;
     fn get_order_key(&self) -> Self::Output {
         self.get_remain_time(get_now())
+    }
+}
+
+impl Debug for CacheRecord {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("")
+            .field(self.get_key())
+            .field(&self.get_create_time())
+            .field(&self.get_remain_time(get_now()))
+            .field(&self.get_ttl_ms())
+            .finish()
+    }
+}
+
+#[cfg(test)]
+impl PartialEq for CacheRecord {
+    fn eq(&self, other: &Self) -> bool {
+        self.to_bytes().eq(&other.to_bytes())
+    }
+}
+
+#[cfg(test)]
+impl From<IpCacheRecord> for CacheRecord {
+    fn from(record: IpCacheRecord) -> Self {
+        Box::new(record)
     }
 }
 

@@ -80,7 +80,7 @@ impl CachePool {
         match self.map.get(key) {
             //缓存中有
             Some(r) => {
-                self.strategy.handle(r.boxed_clone(), get_value_fn)
+                self.strategy.handle(r.clone(), get_value_fn)
             }
             //缓存中没有
             None => {
@@ -95,6 +95,7 @@ impl CachePool {
         let mut vec = Vec::new();
         self.map.iter().for_each(|e| {
             vec.extend(e.value().to_bytes());
+            vec.push(F_SPACE);
         });
         vec.remove(vec.len() - 1);
         vec
