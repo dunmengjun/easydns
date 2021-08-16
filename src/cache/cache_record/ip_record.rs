@@ -88,42 +88,6 @@ pub mod tests {
     use crate::protocol::tests::get_ip_answer;
 
     #[test]
-    fn should_return_true_when_check_expired_given_expired() {
-        let record = get_test_record();
-
-        let result = record.is_expired(1001);
-
-        assert!(result)
-    }
-
-    #[test]
-    fn should_return_false_when_check_expired_given_not_expired() {
-        let record = get_test_record();
-
-        let result = record.is_expired(999);
-
-        assert!(!result)
-    }
-
-    #[test]
-    fn should_return_remain_time_when_get_remain_time_given_not_expired() {
-        let record = get_test_record();
-
-        let result = record.get_remain_time(999);
-
-        assert_eq!(1, result)
-    }
-
-    #[test]
-    fn should_return_0_when_get_remain_time_given_expired() {
-        let record = get_test_record();
-
-        let result = record.get_remain_time(1001);
-
-        assert_eq!(0, result)
-    }
-
-    #[test]
     fn should_return_valid_record_when_create_from_bytes_given_valid_bytes() {
         let vec = get_test_bytes();
         let valid_bytes = vec.as_slice();
@@ -142,18 +106,6 @@ pub mod tests {
 
         let expected = get_test_bytes();
         assert_eq!(expected, result)
-    }
-
-    #[test]
-    fn should_return_remain_time_when_get_order_key_given_test_record() {
-        let record: CacheRecord = Box::new(get_test_record());
-        TIME.with(|t| {
-            t.borrow_mut().set_timestamp(999);
-        });
-
-        let result: u128 = record.get_order_key();
-
-        assert_eq!(1, result)
     }
 
     #[test]

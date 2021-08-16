@@ -79,3 +79,77 @@ impl From<&[u8]> for SoaCacheRecord {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::cache::{SoaCacheRecord, CacheRecord, CacheItem};
+    use crate::system::TIME;
+    use crate::protocol::tests::{get_ip_answer, get_soa_answer};
+
+    #[test]
+    fn should_return_valid_record_when_create_from_bytes_given_valid_bytes() {
+        let vec = get_test_bytes();
+        let valid_bytes = vec.as_slice();
+
+        let result = SoaCacheRecord::from(valid_bytes);
+
+        let expected = get_soa_record();
+        assert_eq!(expected, result)
+    }
+
+    #[test]
+    fn should_return_bytes_when_to_from_bytes_given_valid_bytes() {
+        let record = get_soa_record();
+
+        let result = record.to_bytes();
+
+        let expected = get_test_bytes();
+        assert_eq!(expected, result)
+    }
+
+    #[test]
+    fn should_return_valid_record_when_from_answer_given_valid_answer() {
+        let answer = get_soa_answer();
+        TIME.with(|t| {
+            t.borrow_mut().set_timestamp(0);
+        });
+
+        let result = answer.to_cache();
+
+        let expected: CacheRecord = get_soa_record().into();
+        assert!(expected.eq(&result))
+    }
+
+    fn get_test_bytes() -> Vec<u8> {
+        let bytes: [u8; 44] = [35, 124, 3, 119, 119, 119, 5, 98, 97, 105, 100, 117, 3, 99, 111, 109, 0, 124, 0, 0, 3, 232, 124, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 124, 1, 1, 1, 1];
+        let mut vec = Vec::with_capacity(44);
+        for c in bytes.iter() {
+            vec.push(c.clone())
+        }
+        vec
+    }
+
+    pub fn get_soa_record() -> SoaCacheRecord {
+        SoaCacheRecord {
+            domain: vec![3, 119, 119, 119, 5, 98, 97, 105, 100, 117, 3, 99, 111, 109, 0],
+            data: vec![1, 1, 1, 1],
+            create_time: 0,
+            ttl_ms: 1000,
+        }
+    }
+
+    pub fn build_soa_record(f: fn(&mut SoaCacheRecord)) -> SoaCacheRecord {
+        let mut record = get_soa_record();
+        f(&mut record);
+        record
+    }
+
+    fn get_test_record() -> SoaCacheRecord {
+        SoaCacheRecord {
+            domain: vec![],
+            data: vec![],
+            create_time: 0,
+            ttl_ms: 1000,
+        }
+    }
+}

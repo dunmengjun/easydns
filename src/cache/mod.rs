@@ -138,15 +138,15 @@ fn create_map_by_vec_u8(config: &Config, file_vec: Vec<u8>) -> CacheMap {
     let map = LimitedMap::from(config.cache_num);
     let split = file_vec.as_slice().split(|e| F_SPACE == *e);
     for r_bytes in split {
-        let record: CacheRecord = match r_bytes[0] {
+        let record = match r_bytes[0] {
             IP_RECORD => {
-                Box::new(IpCacheRecord::from(r_bytes))
+                CacheRecord::from(IpCacheRecord::from(r_bytes))
             }
             SOA_RECORD => {
-                Box::new(SoaCacheRecord::from(r_bytes))
+                CacheRecord::from(SoaCacheRecord::from(r_bytes))
             }
             _ => {
-                panic!("xx");
+                panic!("Unsupported cache record!");
             }
         };
         if !record.is_expired(get_now()) {

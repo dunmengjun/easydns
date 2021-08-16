@@ -545,6 +545,35 @@ pub mod tests {
         }
     }
 
+    pub fn get_soa_answer() -> DNSAnswer {
+        let question = Question {
+            name: vec![3, 119, 119, 119, 5, 98, 97, 105, 100, 117, 3, 99, 111, 109, 0],
+            _type: 1,
+            class: 1,
+        };
+        let record = ResourceRecord {
+            name: vec![3, 119, 119, 119, 5, 98, 97, 105, 100, 117, 3, 99, 111, 109, 0],
+            _type: 6,
+            class: 1,
+            ttl: 1,
+            data_len: 4,
+            data: vec![1, 1, 1, 1],
+        };
+        DNSAnswer {
+            header: Header {
+                id: 0,
+                flags: 0x8180,
+                question_count: 1,
+                answer_count: 0,
+                authority_count: 1,
+                additional_count: 0,
+            },
+            questions: vec![question],
+            answers: vec![],
+            authorities: vec![record],
+        }
+    }
+
     pub fn get_ip_answer_with_ttl(ttl: u32) -> DNSAnswer {
         let question = Question {
             name: vec![3, 119, 119, 119, 5, 98, 97, 105, 100, 117, 3, 99, 111, 109, 0],
