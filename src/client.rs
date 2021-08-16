@@ -2,7 +2,7 @@ use tokio::net::UdpSocket;
 use std::net::SocketAddr;
 use crate::system::Result;
 use crate::protocol::DNSAnswer;
-use crate::cursor::{Cursor, ArrayBuf};
+use crate::cursor::{Cursor};
 
 pub struct ClientSocket {
     socket: UdpSocket,
@@ -20,7 +20,7 @@ impl ClientSocket {
         let (_, src) = self.socket
             .recv_from(&mut buf)
             .await?;
-        Ok((Cursor::form(ArrayBuf::from(buf)), src))
+        Ok((Cursor::form(buf.into()), src))
     }
 
     pub async fn back_to(&self, client: SocketAddr, answer: DNSAnswer) -> Result<()> {

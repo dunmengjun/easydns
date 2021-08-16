@@ -7,7 +7,7 @@ use std::sync::Arc;
 use tokio::sync::oneshot;
 use tokio::time::timeout;
 use std::time::Duration;
-use crate::cursor::{Cursor, ArrayBuf};
+use crate::cursor::{Cursor};
 
 pub struct QueryExecutor {
     socket: Arc<UdpSocket>,
@@ -64,7 +64,7 @@ impl QueryExecutor {
     async fn recv(&self) -> Result<()> {
         let mut buf = [0u8; 512];
         self.socket.recv_from(&mut buf).await?;
-        let cursor = Cursor::form(ArrayBuf::from(buf));
+        let cursor = Cursor::form(buf.into());
         let answer = DNSAnswer::from(cursor);
         match self.reg_table.remove(answer.get_id()) {
             Some((_, sender)) => {
