@@ -1,8 +1,8 @@
 use std::fmt::{Debug, Display, Formatter};
 use std::net::{IpAddr, Ipv4Addr};
-use crate::system::{next_id, get_now};
+use crate::system::{next_id, get_now, QueryBuf, AnswerBuf};
 use crate::cache::{IpCacheRecord, SoaCacheRecord, CacheItem, CacheRecord};
-use crate::cursor::Cursor;
+use crate::cursor::{Cursor};
 
 const C_FACTOR: u8 = 192u8;
 const DC_FACTOR: u16 = 16383u16;
@@ -130,7 +130,8 @@ pub struct DNSQuery {
 }
 
 impl DNSQuery {
-    pub fn from(mut cursor: Cursor<u8>) -> Self {
+    pub fn from(buf: QueryBuf) -> Self {
+        let mut cursor = Cursor::form(buf.into());
         let header = Header::from(&mut cursor);
         let mut questions = Vec::new();
         (0..header.question_count as usize).into_iter().for_each(|_| {
@@ -281,8 +282,9 @@ pub struct DNSAnswer {
     authorities: Vec<ResourceRecord>,
 }
 
-impl From<Cursor<u8>> for DNSAnswer {
-    fn from(mut cursor: Cursor<u8>) -> Self {
+impl From<AnswerBuf> for DNSAnswer {
+    fn from(buf: AnswerBuf) -> Self {
+        let mut cursor = Cursor::form(buf.into());
         let mut header = Header::from(&mut cursor);
         let mut questions = Vec::new();
         (0..header.question_count as usize).into_iter().for_each(|_| {

@@ -1,3 +1,5 @@
+use crate::system::default_value;
+
 mod array_buf;
 
 pub type ArrayBuf<R> = Box<dyn Array<R>>;
@@ -57,7 +59,7 @@ impl<R> Cursor<R> {
     }
 
     pub fn take_bytes<const N: usize>(&mut self) -> [R; N] where R: Default + Copy {
-        let mut k = [R::default(); N];
+        let mut k = default_value();
         (0..N).into_iter().for_each(|index| {
             k[index] = self.take();
         });

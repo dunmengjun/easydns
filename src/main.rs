@@ -36,11 +36,11 @@ async fn main() -> Result<()> {
     loop {
         tokio::select! {
             result = client.recv() => {
-                let (cursor, src) = result?;
+                let (query_buf, src) = result?;
                 let arc_client = client.clone();
                 let arc_handler = handler.clone();
                 tokio::spawn(async move {
-                    let answer = match arc_handler.handle_query(cursor).await {
+                    let answer = match arc_handler.handle_query(query_buf).await {
                         Ok(answer) => answer,
                         Err(e) => {
                             error!("Handle query task error: {:?}", e);

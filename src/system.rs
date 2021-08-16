@@ -8,6 +8,12 @@ use std::fmt::{Debug, Formatter, Display};
 use std::cell::RefCell;
 
 pub type Result<T> = core::result::Result<T, Box<dyn Error>>;
+pub type QueryBuf = [u8; 256];
+pub type AnswerBuf = [u8; 512];
+
+pub fn default_value<T, const N: usize>() -> [T; N] where T: Default + Copy {
+    [T::default(); N]
+}
 
 #[derive(Debug)]
 pub struct FileNotFoundError {

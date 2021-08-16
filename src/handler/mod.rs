@@ -12,9 +12,8 @@ use crate::handler::ip_maker::IpChoiceMaker;
 use crate::handler::legal_checker::LegalChecker;
 use crate::handler::query_sender::QuerySender;
 use crate::protocol::{DNSAnswer, DNSQuery};
-use crate::system::Result;
+use crate::system::{Result, QueryBuf};
 use crate::handler::server_group::ServerGroup;
-use crate::cursor::Cursor;
 
 mod legal_checker;
 mod cache_handler;
@@ -52,14 +51,14 @@ impl HandlerContext {
         })
     }
 
-    pub async fn handle_query(&self, cursor: Cursor<u8>) -> Result<DNSAnswer> {
+    pub async fn handle_query(&self, buf: QueryBuf) -> Result<DNSAnswer> {
         let mut query_clain = Clain::new();
         query_clain.add(DomainFilter::new(self.filter.clone()));
         query_clain.add(LegalChecker::new(self.server_group.clone()));
         query_clain.add(CacheHandler::new(self.cache_pool.clone()));
         query_clain.add(IpChoiceMaker::new(self.pinger.clone()));
         query_clain.add(QuerySender::new(self.server_group.clone()));
-        query_clain.next(DNSQuery::from(cursor)).await
+        query_clain.next(DNSQuery::from(buf)).await
     }
 }
 

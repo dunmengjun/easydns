@@ -2,12 +2,11 @@ use tokio::net::UdpSocket;
 use dashmap::DashMap;
 use crate::protocol::{DNSAnswer, DNSQuery};
 use tokio::sync::oneshot::Sender;
-use crate::system::{Result, next_id};
+use crate::system::{Result, next_id, AnswerBuf, default_value};
 use std::sync::Arc;
 use tokio::sync::oneshot;
 use tokio::time::timeout;
 use std::time::Duration;
-use crate::cursor::{Cursor};
 
 pub struct QueryExecutor {
     socket: Arc<UdpSocket>,
@@ -62,10 +61,9 @@ impl QueryExecutor {
     }
 
     async fn recv(&self) -> Result<()> {
-        let mut buf = [0u8; 512];
+        let mut buf: AnswerBuf = default_value();
         self.socket.recv_from(&mut buf).await?;
-        let cursor = Cursor::form(buf.into());
-        let answer = DNSAnswer::from(cursor);
+        let answer = DNSAnswer::from(buf);
         match self.reg_table.remove(answer.get_id()) {
             Some((_, sender)) => {
                 if let Err(e) = sender.send(answer) {
