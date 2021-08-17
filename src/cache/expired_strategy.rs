@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::protocol::DNSAnswer;
 use crate::system::get_now;
 use crate::system::Result;
-use crate::cache::cache_record::{CacheRecord};
+use crate::cache::cache_record::{CacheRecord, Expired};
 
 pub struct ExpiredCacheStrategy {
     map: Arc<CacheMap>,

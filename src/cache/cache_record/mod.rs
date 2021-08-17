@@ -14,11 +14,18 @@ pub type CacheRecord = Box<dyn CacheItem>;
 pub const IP_RECORD: u8 = '*' as u8;
 pub const SOA_RECORD: u8 = '#' as u8;
 
-pub trait CacheItem: Sync + Send + BoxedClone {
+pub trait Expired {
+    fn is_expired(&self, timestamp: u128) -> bool;
+}
+
+impl Expired for CacheRecord {
     fn is_expired(&self, timestamp: u128) -> bool {
         let duration = timestamp - self.get_create_time();
         self.get_ttl_ms() < duration
     }
+}
+
+pub trait CacheItem: Sync + Send + BoxedClone {
     fn get_remain_time(&self, timestamp: u128) -> u128 {
         let duration = timestamp - self.get_create_time();
         if self.get_ttl_ms() > duration {

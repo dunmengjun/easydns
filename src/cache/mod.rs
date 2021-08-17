@@ -17,7 +17,7 @@ pub use cache_record::SoaCacheRecord;
 pub use cache_record::CacheItem;
 use crate::cache::expired_strategy::ExpiredCacheStrategy;
 use crate::cache::timeout_strategy::TimeoutCacheStrategy;
-use crate::cache::cache_record::IP_RECORD;
+use crate::cache::cache_record::{IP_RECORD, Expired};
 use crate::cache::cache_record::SOA_RECORD;
 use crate::cursor::Cursor;
 

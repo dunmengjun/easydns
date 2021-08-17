@@ -4,7 +4,7 @@ use crate::protocol::DNSAnswer;
 use crate::system::{get_sub_now, get_now};
 use std::time::Duration;
 use crate::system::Result;
-use crate::cache::cache_record::{CacheRecord};
+use crate::cache::cache_record::{CacheRecord, Expired};
 
 pub struct TimeoutCacheStrategy {
     map: Arc<CacheMap>,
