@@ -71,13 +71,12 @@ impl CachePool {
         match self.map.get(&key) {
             //缓存中有
             Some(r) => {
-                let answer = self.strategy.handle(r, future).await?;
-                Ok(answer)
+                Ok(self.strategy.handle(r, future).await?)
             }
             //缓存中没有
             None => {
                 let answer = future.await?;
-                if let Some(r) = (&answer).to_cache() {
+                if let Some(r) = answer.to_cache() {
                     self.map.insert(key, r);
                 }
                 Ok(answer)
