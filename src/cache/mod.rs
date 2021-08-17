@@ -30,7 +30,6 @@ pub trait CacheStrategy: Send + Sync {
 }
 
 pub struct CachePool {
-    disabled: bool,
     strategy: ExpiredStrategy,
     file_name: String,
     map: Arc<CacheMap>,
@@ -51,11 +50,7 @@ impl Drop for CachePool {
 
 impl CachePool {
     pub async fn from(config: &Config) -> Result<Self> {
-        let limit_map: Arc<CacheMap> = Arc::new(if config.cache_on {
-            create_map_by_config(config).await?
-        } else {
-            LimitedMap::from(0)
-        });
+        let limit_map: Arc<CacheMap> = Arc::new(create_map_by_config(config).await?);
         let strategy: ExpiredStrategy = if config.cache_get_strategy == 0 {
             Box::new(ExpiredCacheStrategy::from(limit_map.clone()))
         } else {
@@ -63,17 +58,12 @@ impl CachePool {
                                                 config.cache_ttl_timeout_ms as u128))
         };
         Ok(CachePool {
-            disabled: !config.cache_on,
             strategy,
             file_name: config.cache_file.clone(),
             map: limit_map,
         })
     }
     pub fn get(&self, key: &Vec<u8>, get_value_fn: GetAnswerFunc) -> Result<DNSAnswer> {
-        //如果缓存被禁用
-        if self.disabled {
-            return get_value_fn();
-        }
         //从缓存map中取
         match self.map.get(key) {
             //缓存中有
@@ -103,10 +93,6 @@ impl CachePool {
     }
 
     pub async fn write_to_file(&self) -> Result<()> {
-        if self.disabled {
-            info!("缓存已禁用");
-            return Ok(());
-        }
         if self.map.is_empty() {
             info!("没有缓存需要写入文件");
             return Ok(());
