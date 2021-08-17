@@ -78,7 +78,7 @@ impl CachePool {
         match self.map.get(key) {
             //缓存中有
             Some(r) => {
-                self.strategy.handle(r.clone(), get_value_fn)
+                self.strategy.handle(r, get_value_fn)
             }
             //缓存中没有
             None => {

@@ -2,7 +2,6 @@ use dashmap::DashMap;
 use std::hash::Hash;
 use std::collections::hash_map::RandomState;
 use std::sync::Mutex;
-use dashmap::mapref::one::Ref;
 
 pub trait GetOrdKey {
     type Output: Ord + Clone;
@@ -16,7 +15,7 @@ pub struct LimitedMap<K, V> {
 }
 
 impl<K, V> LimitedMap<K, V>
-    where K: Eq + Hash + Clone, V: GetOrdKey {
+    where K: Eq + Hash + Clone, V: Clone + GetOrdKey {
     pub fn from(limit: usize) -> Self {
         LimitedMap {
             records: DashMap::with_capacity(limit),
@@ -24,8 +23,8 @@ impl<K, V> LimitedMap<K, V>
             lock_key: Mutex::new(0),
         }
     }
-    pub fn get(&self, key: &K) -> Option<Ref<K, V, RandomState>> {
-        self.records.get(key)
+    pub fn get(&self, key: &K) -> Option<V> {
+        self.records.get(key).map(|e| e.value().clone())
     }
 
     pub fn insert(&self, key: K, value: V) {
