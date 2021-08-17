@@ -3,7 +3,8 @@ use crate::cache::CachePool;
 use std::sync::Arc;
 use crate::handler::{Clain, Handler};
 use crate::protocol::{DNSAnswer, DNSQuery};
-use crate::system::{Result, block_on};
+use crate::system::{Result};
+use futures_util::FutureExt;
 
 #[derive(Clone)]
 pub struct CacheHandler {
@@ -18,20 +19,16 @@ impl CacheHandler {
     }
 }
 
+
 #[async_trait]
 impl Handler for CacheHandler {
-    async fn handle(&self, clain: &mut Clain, query: DNSQuery) -> Result<DNSAnswer> {
-        let mut temp_chain = clain.clone();
-        let cloned_query = query.clone();
-        let result = self.cache_pool
-            .get(query.get_domain(), Box::new(|| {
-                block_on(async move {
-                    temp_chain.next(cloned_query).await
-                })
-            }));
-        result.map(|mut r| {
-            r.set_id(query.get_id().clone());
-            r
-        })
+    async fn handle(&self, clain: Clain, query: DNSQuery) -> Result<DNSAnswer> {
+        let id = query.get_id().clone();
+        self.cache_pool
+            .get(query.get_domain().clone(), clain.next(query).boxed()).await
+            .map(|mut r| {
+                r.set_id(id);
+                r
+            })
     }
 }

@@ -20,13 +20,16 @@ use crate::cache::timeout_strategy::TimeoutCacheStrategy;
 use crate::cache::cache_record::{IP_RECORD, Expired};
 use crate::cache::cache_record::SOA_RECORD;
 use crate::cursor::Cursor;
+use async_trait::async_trait;
+use futures_util::future::BoxFuture;
 
-pub type GetAnswerFunc = Box<dyn FnOnce() -> Result<DNSAnswer> + Send + 'static>;
 pub type CacheMap = LimitedMap<Vec<u8>, CacheRecord>;
 type ExpiredStrategy = Box<dyn CacheStrategy>;
+type AnswerFuture = BoxFuture<'static, Result<DNSAnswer>>;
 
+#[async_trait]
 pub trait CacheStrategy: Send + Sync {
-    fn handle(&self, record: CacheRecord, get_value_fn: GetAnswerFunc) -> Result<DNSAnswer>;
+    async fn handle(&self, record: CacheRecord, future: AnswerFuture) -> Result<DNSAnswer>;
 }
 
 pub struct CachePool {
@@ -63,18 +66,19 @@ impl CachePool {
             map: limit_map,
         })
     }
-    pub fn get(&self, key: &Vec<u8>, get_value_fn: GetAnswerFunc) -> Result<DNSAnswer> {
+    pub async fn get(&self, key: Vec<u8>, future: AnswerFuture) -> Result<DNSAnswer> {
         //从缓存map中取
-        match self.map.get(key) {
+        match self.map.get(&key) {
             //缓存中有
             Some(r) => {
-                self.strategy.handle(r, get_value_fn)
+                let answer = self.strategy.handle(r, future).await?;
+                Ok(answer)
             }
             //缓存中没有
             None => {
-                let answer = get_value_fn()?;
+                let answer = future.await?;
                 if let Some(r) = (&answer).to_cache() {
-                    self.map.insert(key.clone(), r);
+                    self.map.insert(key, r);
                 }
                 Ok(answer)
             }

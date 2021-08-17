@@ -20,7 +20,7 @@ impl DomainFilter {
 
 #[async_trait]
 impl Handler for DomainFilter {
-    async fn handle(&self, clain: &mut Clain, query: DNSQuery) -> Result<DNSAnswer> {
+    async fn handle(&self, clain: Clain, query: DNSQuery) -> Result<DNSAnswer> {
         let domain = query.get_readable_domain();
         if self.filter.contain(domain) {
             //返回soa

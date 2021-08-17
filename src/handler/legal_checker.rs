@@ -20,7 +20,7 @@ impl LegalChecker {
 
 #[async_trait]
 impl Handler for LegalChecker {
-    async fn handle(&self, clain: &mut Clain, query: DNSQuery) -> Result<DNSAnswer> {
+    async fn handle(&self, clain: Clain, query: DNSQuery) -> Result<DNSAnswer> {
         if !query.is_supported() {
             debug!("The dns query is not supported , will not mit the cache!");
             let answer = self.server_group.send_query(&query).await?;

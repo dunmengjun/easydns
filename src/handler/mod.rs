@@ -86,30 +86,12 @@ impl Clain {
         self.funcs.push(Box::new(handler));
     }
 
-    async fn next(&mut self, query: DNSQuery) -> Result<DNSAnswer> {
+    async fn next(mut self, query: DNSQuery) -> Result<DNSAnswer> {
         self.funcs.remove(0).handle(self, query).await
-    }
-
-    fn clone(&self) -> Self {
-        let mut vec = Vec::new();
-        self.funcs.iter().for_each(|e| vec.push(e.clone_handler()));
-        Clain {
-            funcs: vec
-        }
     }
 }
 
 #[async_trait]
-trait Handler: Send + Sync + HandlerCloner {
-    async fn handle(&self, clain: &mut Clain, query: DNSQuery) -> Result<DNSAnswer>;
-}
-
-trait HandlerCloner {
-    fn clone_handler(&self) -> Box<dyn Handler>;
-}
-
-impl<T> HandlerCloner for T where T: 'static + Clone + Handler {
-    fn clone_handler(&self) -> Box<dyn Handler> {
-        Box::new(self.clone())
-    }
+trait Handler: Send + Sync {
+    async fn handle(&self, clain: Clain, query: DNSQuery) -> Result<DNSAnswer>;
 }

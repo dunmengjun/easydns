@@ -21,7 +21,7 @@ impl IpChoiceMaker {
 
 #[async_trait]
 impl Handler for IpChoiceMaker {
-    async fn handle(&self, clain: &mut Clain, query: DNSQuery) -> Result<DNSAnswer> {
+    async fn handle(&self, clain: Clain, query: DNSQuery) -> Result<DNSAnswer> {
         let mut answer = clain.next(query).await?;
         let ip_vec = answer.get_ip_vec();
         if ip_vec.is_empty() {
@@ -47,7 +47,7 @@ pub struct IpFirstMaker;
 
 #[async_trait]
 impl Handler for IpFirstMaker {
-    async fn handle(&self, clain: &mut Clain, query: DNSQuery) -> Result<DNSAnswer> {
+    async fn handle(&self, clain: Clain, query: DNSQuery) -> Result<DNSAnswer> {
         let mut answer = clain.next(query).await?;
         let ip_vec = answer.get_ip_vec();
         if ip_vec.is_empty() {
