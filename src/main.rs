@@ -17,6 +17,7 @@ mod handler;
 mod cache;
 mod client;
 mod cursor;
+mod protocol_new;
 
 #[macro_use]
 extern crate log;
