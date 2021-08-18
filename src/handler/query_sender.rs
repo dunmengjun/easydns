@@ -1,9 +1,10 @@
 use async_trait::async_trait;
 use std::sync::Arc;
-use crate::protocol::{DNSQuery, DNSAnswer};
+use crate::protocol::{DNSQuery};
 use crate::handler::{Clain, Handler};
 use crate::system::Result;
 use crate::handler::server_group::ServerGroup;
+use crate::protocol_new::DnsAnswer;
 
 #[derive(Clone)]
 pub struct QuerySender {
@@ -20,7 +21,7 @@ impl QuerySender {
 
 #[async_trait]
 impl Handler for QuerySender {
-    async fn handle(&self, _: Clain, query: DNSQuery) -> Result<DNSAnswer> {
+    async fn handle(&self, _: Clain, query: DNSQuery) -> Result<DnsAnswer> {
         let answer = self.server_group.send_query(&query).await?;
         // info!("answer: {:?}", answer);
         // if answer.is_empty() {

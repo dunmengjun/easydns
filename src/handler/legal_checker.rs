@@ -1,9 +1,10 @@
 use async_trait::async_trait;
 use std::sync::Arc;
-use crate::protocol::{DNSQuery, DNSAnswer};
+use crate::protocol::{DNSQuery};
 use crate::handler::{Handler, Clain};
 use crate::system::Result;
 use crate::handler::server_group::ServerGroup;
+use crate::protocol_new::DnsAnswer;
 
 #[derive(Clone)]
 pub struct LegalChecker {
@@ -20,11 +21,11 @@ impl LegalChecker {
 
 #[async_trait]
 impl Handler for LegalChecker {
-    async fn handle(&self, clain: Clain, query: DNSQuery) -> Result<DNSAnswer> {
+    async fn handle(&self, clain: Clain, query: DNSQuery) -> Result<DnsAnswer> {
         if !query.is_supported() {
             debug!("The dns query is not supported , will not mit the cache!");
             let answer = self.server_group.send_query(&query).await?;
-            debug!("dns answer: {:?}", answer);
+            debug!("dns answer: {}", answer);
             return Ok(answer);
         } else {
             clain.next(query).await

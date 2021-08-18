@@ -10,7 +10,7 @@ pub struct Header {
     pub question_count: u16,
     pub answer_count: u16,
     pub authority_count: u16,
-    additional_count: u16,
+    pub(crate) additional_count: u16,
 }
 
 impl Header {

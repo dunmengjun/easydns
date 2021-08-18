@@ -3,7 +3,6 @@ mod expired_strategy;
 mod timeout_strategy;
 mod cache_record;
 
-use crate::protocol::DNSAnswer;
 use crate::config::Config;
 use crate::system::{Result, get_now, block_on};
 use std::sync::Arc;
@@ -22,14 +21,15 @@ use crate::cache::cache_record::SOA_RECORD;
 use crate::cursor::Cursor;
 use async_trait::async_trait;
 use futures_util::future::BoxFuture;
+use crate::protocol_new::DnsAnswer;
 
 pub type CacheMap = LimitedMap<Vec<u8>, CacheRecord>;
 type ExpiredStrategy = Box<dyn CacheStrategy>;
-type AnswerFuture = BoxFuture<'static, Result<DNSAnswer>>;
+type AnswerFuture = BoxFuture<'static, Result<DnsAnswer>>;
 
 #[async_trait]
 pub trait CacheStrategy: Send + Sync {
-    async fn handle(&self, record: CacheRecord, future: AnswerFuture) -> Result<DNSAnswer>;
+    async fn handle(&self, record: CacheRecord, future: AnswerFuture) -> Result<DnsAnswer>;
 }
 
 pub struct CachePool {
@@ -66,7 +66,7 @@ impl CachePool {
             map: limit_map,
         })
     }
-    pub async fn get(&self, key: Vec<u8>, future: AnswerFuture) -> Result<DNSAnswer> {
+    pub async fn get(&self, key: Vec<u8>, future: AnswerFuture) -> Result<DnsAnswer> {
         //从缓存map中取
         match self.map.get(&key) {
             //缓存中有

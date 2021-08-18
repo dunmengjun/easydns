@@ -33,6 +33,14 @@ impl SoaResource {
             data,
         }
     }
+
+    pub fn new_wit_default_soa(name: String, ttl: u32) -> Self {
+        SoaResource {
+            name,
+            ttl,
+            data: Soa::default(),
+        }
+    }
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -63,6 +71,18 @@ impl Soa {
             interval_retry,
             expire_limit,
             minimum_ttl,
+        }
+    }
+
+    fn default() -> Self {
+        Soa {
+            name_server: "dns17.hichina.com".to_string(),
+            mailbox: "hostmaster.hichina.com".to_string(),
+            serial_number: 1,
+            interval_refresh: 3600,
+            interval_retry: 1200,
+            expire_limit: 3600,
+            minimum_ttl: 600,
         }
     }
 }

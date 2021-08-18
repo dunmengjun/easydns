@@ -2,12 +2,12 @@ mod ip_record;
 mod soa_record;
 
 use crate::system::get_now;
-use crate::protocol::DNSAnswer;
 use crate::cache::limit_map::GetOrdKey;
 
 pub use ip_record::IpCacheRecord;
 pub use soa_record::SoaCacheRecord;
 use std::fmt::{Debug, Formatter};
+use crate::protocol_new::DnsAnswer;
 
 pub type CacheRecord = Box<dyn CacheItem>;
 
@@ -38,7 +38,7 @@ pub trait CacheItem: Sync + Send + BoxedClone {
     fn get_ttl_ms(&self) -> u128;
     fn get_key(&self) -> &Vec<u8>;
     fn to_bytes(&self) -> Vec<u8>;
-    fn to_answer(&self) -> DNSAnswer;
+    fn to_answer(&self) -> DnsAnswer;
 }
 
 pub trait BoxedClone {
@@ -98,10 +98,10 @@ impl PartialEq for CacheRecord {
 pub mod tests {
     pub use crate::cache::cache_record::ip_record::tests;
     use crate::cache::{CacheItem, CacheRecord};
-    use crate::protocol::DNSAnswer;
     use crate::cache::cache_record::BoxedClone;
     use crate::system::TIME;
     use crate::cache::limit_map::GetOrdKey;
+    use crate::protocol_new::DnsAnswer;
 
     #[test]
     fn should_return_true_when_check_expired_given_expired() {
@@ -180,10 +180,10 @@ pub mod tests {
         }
 
         fn to_bytes(&self) -> Vec<u8> {
-            todo!()
+            vec![]
         }
 
-        fn to_answer(&self) -> DNSAnswer {
+        fn to_answer(&self) -> DnsAnswer {
             todo!()
         }
     }

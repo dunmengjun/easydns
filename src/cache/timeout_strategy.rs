@@ -1,11 +1,11 @@
 use std::sync::Arc;
 use crate::cache::{CacheStrategy, CacheMap, AnswerFuture};
-use crate::protocol::DNSAnswer;
 use crate::system::{get_sub_now, get_now};
 use std::time::Duration;
 use crate::system::Result;
 use crate::cache::cache_record::{CacheRecord, Expired};
 use async_trait::async_trait;
+use crate::protocol_new::DnsAnswer;
 
 pub struct TimeoutCacheStrategy {
     map: Arc<CacheMap>,
@@ -14,7 +14,7 @@ pub struct TimeoutCacheStrategy {
 
 #[async_trait]
 impl CacheStrategy for TimeoutCacheStrategy {
-    async fn handle(&self, record: CacheRecord, future: AnswerFuture) -> Result<DNSAnswer> {
+    async fn handle(&self, record: CacheRecord, future: AnswerFuture) -> Result<DnsAnswer> {
         let now = get_sub_now(Duration::from_millis(self.timeout as u64));
         if record.is_expired(now) {
             let answer = future.await?;

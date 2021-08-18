@@ -1,7 +1,7 @@
 use crate::cache::cache_record::{CacheItem, SOA_RECORD};
 use crate::system::get_now;
-use crate::protocol::DNSAnswer;
 use crate::cursor::Cursor;
+use crate::protocol_new::DnsAnswer;
 
 #[derive(Clone, PartialOrd, PartialEq, Debug)]
 pub struct SoaCacheRecord {
@@ -28,8 +28,8 @@ impl CacheItem for SoaCacheRecord {
         self.into()
     }
 
-    fn to_answer(&self) -> DNSAnswer {
-        DNSAnswer::from(self)
+    fn to_answer(&self) -> DnsAnswer {
+        todo!()
     }
 }
 

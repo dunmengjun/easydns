@@ -3,17 +3,18 @@ mod prefer_server_sender;
 mod combine_server_sender;
 mod query_executor;
 
-use crate::protocol::{DNSQuery, DNSAnswer};
+use crate::protocol::{DNSQuery};
 use crate::system::Result;
 use async_trait::async_trait;
 use crate::handler::server_group::fast_server_sender::FastServerSender;
 use crate::handler::server_group::prefer_server_sender::PreferServerSender;
 use crate::handler::server_group::combine_server_sender::CombineServerSender;
 use crate::handler::server_group::query_executor::QueryExecutor;
+use crate::protocol_new::DnsAnswer;
 
 #[async_trait]
 pub trait ServerSender: Sync + Send {
-    async fn send(&self, query: &DNSQuery) -> Result<DNSAnswer>;
+    async fn send(&self, query: &DNSQuery) -> Result<DnsAnswer>;
 }
 
 pub struct ServerGroup {
@@ -34,7 +35,7 @@ impl ServerGroup {
         })
     }
 
-    pub async fn send_query(&self, query: &DNSQuery) -> Result<DNSAnswer> {
+    pub async fn send_query(&self, query: &DNSQuery) -> Result<DnsAnswer> {
         self.server_sender.send(query).await
     }
 }

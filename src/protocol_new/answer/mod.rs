@@ -9,19 +9,25 @@ use crate::protocol_new::question::Question;
 use crate::system::AnswerBuf;
 use crate::cursor::Cursor;
 use crate::protocol_new::header::Header;
-use crate::protocol_new::answer::failure::FailureAnswer;
 use crate::protocol_new::answer::resource::{CnameResource, Ipv4Resource, SoaResource};
 use crate::protocol_new::answer::no_such_name::NoSuchNameAnswer;
-use crate::protocol_new::answer::ipv4::Ipv4Answer;
-use crate::protocol_new::answer::soa::SoaAnswer;
 use std::fmt::{Display, Formatter};
 use std::any::Any;
+use crate::protocol::DNSQuery;
 
 pub type DnsAnswer = Box<dyn Answer>;
 
+pub use ipv4::Ipv4Answer;
+pub use failure::FailureAnswer;
+pub use soa::SoaAnswer;
+
 pub trait Answer: Display + Send + Sync {
     fn to_cache(&self) -> Option<CacheRecord>;
-    fn as_any(&self) -> &dyn Any;
+    fn to_bytes(&self) -> &[u8];
+    fn as_any(&self) -> &(dyn Any + Send + Sync);
+    fn as_mut_any(&mut self) -> &mut (dyn Any + Send + Sync);
+    fn set_id(&mut self, id: u16);
+    fn get_id(&self) -> &u16;
 }
 
 impl From<AnswerBuf> for DnsAnswer {
@@ -34,7 +40,7 @@ impl From<AnswerBuf> for DnsAnswer {
         if header.question_count > 1 {
             panic!("不支持一个请求里有多个域名查询")
         }
-        let mut question = Question::from(&mut cursor);
+        let question = Question::from(&mut cursor);
         if header.flags == 0x8182 {
             return DnsAnswer::from(FailureAnswer::from(header, question));
         }

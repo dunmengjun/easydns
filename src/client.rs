@@ -1,7 +1,7 @@
 use tokio::net::UdpSocket;
 use std::net::SocketAddr;
 use crate::system::{Result, QueryBuf, default_value};
-use crate::protocol::DNSAnswer;
+use crate::protocol_new::DnsAnswer;
 
 pub struct ClientSocket {
     socket: UdpSocket,
@@ -22,8 +22,8 @@ impl ClientSocket {
         Ok((buf, src))
     }
 
-    pub async fn back_to(&self, client: SocketAddr, answer: DNSAnswer) -> Result<()> {
-        self.socket.send_to(answer.to_u8_vec().as_slice(), client).await?;
+    pub async fn back_to(&self, client: SocketAddr, answer: DnsAnswer) -> Result<()> {
+        self.socket.send_to(answer.to_bytes(), client).await?;
         Ok(())
     }
 }

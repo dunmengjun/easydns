@@ -1,10 +1,10 @@
 use crate::cache::{CacheStrategy, CacheMap, AnswerFuture};
 use std::sync::Arc;
-use crate::protocol::DNSAnswer;
 use crate::system::get_now;
 use crate::system::Result;
 use crate::cache::cache_record::{CacheRecord, Expired};
 use async_trait::async_trait;
+use crate::protocol_new::DnsAnswer;
 
 pub struct ExpiredCacheStrategy {
     map: Arc<CacheMap>,
@@ -12,7 +12,7 @@ pub struct ExpiredCacheStrategy {
 
 #[async_trait]
 impl CacheStrategy for ExpiredCacheStrategy {
-    async fn handle(&self, record: CacheRecord, future: AnswerFuture) -> Result<DNSAnswer> {
+    async fn handle(&self, record: CacheRecord, future: AnswerFuture) -> Result<DnsAnswer> {
         if record.is_expired(get_now()) {
             let answer = future.await?;
             if let Some(r) = answer.to_cache() {

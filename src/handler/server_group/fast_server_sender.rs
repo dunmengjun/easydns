@@ -1,5 +1,5 @@
 use std::sync::{Arc, Mutex};
-use crate::protocol::{DNSAnswer, DNSQuery};
+use crate::protocol::{DNSQuery};
 use crate::system::Result;
 use tokio::time::Duration;
 use futures_util::FutureExt;
@@ -8,6 +8,7 @@ use futures_util::future::select_all;
 use tokio::time::interval;
 use crate::handler::server_group::query_executor::QueryExecutor;
 use crate::handler::server_group::ServerSender;
+use crate::protocol_new::DnsAnswer;
 
 pub struct FastServerSender {
     executor: Arc<QueryExecutor>,
@@ -17,7 +18,7 @@ pub struct FastServerSender {
 
 #[async_trait]
 impl ServerSender for FastServerSender {
-    async fn send(&self, query: &DNSQuery) -> Result<DNSAnswer> {
+    async fn send(&self, query: &DNSQuery) -> Result<DnsAnswer> {
         let address = self.fast_server.lock().unwrap().clone();
         self.executor.exec(address.as_str(), query).await
     }
@@ -65,7 +66,7 @@ impl FastServerSender {
         Ok(())
     }
 
-    async fn get_answer_from_fast_server(&self, query: &DNSQuery) -> Result<(DNSAnswer, usize)> {
+    async fn get_answer_from_fast_server(&self, query: &DNSQuery) -> Result<(DnsAnswer, usize)> {
         let servers = &self.servers;
         let mut future_vec = Vec::with_capacity(servers.len());
         for address in servers.iter() {

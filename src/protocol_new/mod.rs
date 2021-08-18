@@ -11,7 +11,7 @@ use question::Question;
 const C_FACTOR: u8 = 192u8;
 const DC_FACTOR: u16 = 16383u16;
 
-pub use answer::DnsAnswer;
+pub use answer::{DnsAnswer, Ipv4Answer, FailureAnswer, SoaAnswer};
 
 fn parse_name(cursor: &mut Cursor<u8>, name_vec: &mut Vec<u8>) {
     if cursor.peek() & C_FACTOR == C_FACTOR {
@@ -38,4 +38,5 @@ fn unzip_domain(cursor: &mut Cursor<u8>) -> String {
     domain_vec.remove(0);
     String::from_utf8(domain_vec).unwrap()
 }
+
 
