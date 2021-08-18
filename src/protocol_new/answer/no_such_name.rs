@@ -19,7 +19,7 @@ impl Display for NoSuchNameAnswer {
 
 impl Answer for NoSuchNameAnswer {
     fn to_cache(&self) -> Option<CacheRecord> {
-        todo!()
+        None
     }
 
     fn to_bytes(&self) -> Vec<u8> {

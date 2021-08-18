@@ -101,7 +101,7 @@ pub mod tests {
     use crate::cache::cache_record::BoxedClone;
     use crate::system::TIME;
     use crate::cache::limit_map::GetOrdKey;
-    use crate::protocol_new::DnsAnswer;
+    use crate::protocol_new::{DnsAnswer, FailureAnswer};
 
     #[test]
     fn should_return_true_when_check_expired_given_expired() {
@@ -184,7 +184,7 @@ pub mod tests {
         }
 
         fn to_answer(&self) -> DnsAnswer {
-            todo!()
+            DnsAnswer::from(FailureAnswer::new(0, "".to_string()))
         }
     }
 }

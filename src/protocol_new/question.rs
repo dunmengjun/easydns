@@ -1,22 +1,11 @@
 use crate::cursor::Cursor;
-use crate::protocol_new::{unzip_domain};
+use crate::protocol_new::{unzip_domain, wrap_name};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Question {
     pub name: String,
     pub _type: u16,
     pub class: u16,
-}
-
-fn wrap_name(name: &String) -> Vec<u8> {
-    let split = name.split('.');
-    let mut vec = Vec::new();
-    for s in split {
-        vec.push(s.len() as u8);
-        vec.extend(s.bytes())
-    }
-    vec.push(0);
-    vec
 }
 
 impl From<&Question> for Vec<u8> {
