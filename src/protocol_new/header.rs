@@ -10,24 +10,24 @@ pub struct Header {
     pub question_count: u16,
     pub answer_count: u16,
     pub authority_count: u16,
-    pub(crate) additional_count: u16,
+    pub additional_count: u16,
 }
 
-impl Header {
-    fn to_u8_vec(&self) -> Vec<u8> {
-        self.to_u8_with_id(self.id)
-    }
-    fn to_u8_with_id(&self, id: u16) -> Vec<u8> {
+impl From<&Header> for Vec<u8> {
+    fn from(header: &Header) -> Self {
         let mut result = Vec::with_capacity(12);
-        result.extend(&id.to_be_bytes());
-        result.extend(&self.flags.to_be_bytes());
-        result.extend(&self.question_count.to_be_bytes());
-        result.extend(&self.answer_count.to_be_bytes());
-        result.extend(&self.authority_count.to_be_bytes());
-        result.extend(&self.additional_count.to_be_bytes());
+        result.extend(&header.id.to_be_bytes());
+        result.extend(&header.flags.to_be_bytes());
+        result.extend(&header.question_count.to_be_bytes());
+        result.extend(&header.answer_count.to_be_bytes());
+        result.extend(&header.authority_count.to_be_bytes());
+        result.extend(&header.additional_count.to_be_bytes());
         result
     }
-    pub fn from(cursor: &mut Cursor<u8>) -> Self {
+}
+
+impl From<&Cursor<u8>> for Header {
+    fn from(cursor: &Cursor<u8>) -> Self {
         let header = Header {
             id: u16::from_be_bytes([cursor.take(), cursor.take()]),
             flags: u16::from_be_bytes([cursor.take(), cursor.take()]),
@@ -39,7 +39,9 @@ impl Header {
         cursor.move_to(2);
         header
     }
+}
 
+impl Header {
     fn is_legal(&self) -> bool {
         !(self.answer_count > 0)
     }
@@ -51,5 +53,16 @@ impl Header {
         self.is_legal()
             && flag_supported
             && self.question_count == 1
+    }
+
+    pub fn new() -> Self {
+        Header {
+            id: 0,
+            flags: 0,
+            question_count: 0,
+            answer_count: 0,
+            authority_count: 0,
+            additional_count: 0,
+        }
     }
 }

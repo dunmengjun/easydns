@@ -1,22 +1,21 @@
 use crate::protocol_new::question::Question;
 use crate::cursor::Cursor;
-use crate::protocol_new::answer::resource::Resource;
+use crate::protocol_new::answer::resource::{Resource, BasicData};
 use crate::protocol_new::unzip_domain;
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct CnameResource {
-    name: String,
-    ttl: u32,
+    basic: BasicData,
     data: String,
 }
 
 impl Resource<String> for CnameResource {
     fn get_name(&self) -> &String {
-        &self.name
+        self.basic.get_name()
     }
 
     fn get_ttl(&self) -> u32 {
-        self.ttl
+        self.basic.get_ttl()
     }
 
     fn get_data(&self) -> &String {
@@ -25,12 +24,10 @@ impl Resource<String> for CnameResource {
 }
 
 impl CnameResource {
-    pub fn from(name: String, ttl: u32, cursor: &mut Cursor<u8>) -> Self {
-        let _data_len = u16::from_be_bytes([cursor.take(), cursor.take()]);
+    pub fn from(basic: BasicData, cursor: &Cursor<u8>) -> Self {
         let data = unzip_domain(cursor);
         CnameResource {
-            name,
-            ttl,
+            basic,
             data,
         }
     }

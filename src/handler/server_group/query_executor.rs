@@ -65,10 +65,10 @@ impl QueryExecutor {
         let mut buf: AnswerBuf = default_value();
         self.socket.recv_from(&mut buf).await?;
         let answer = DnsAnswer::from(buf);
-        match self.reg_table.remove(answer.get_id()) {
+        match self.reg_table.remove(&answer.get_id()) {
             Some((_, sender)) => {
                 if let Err(e) = sender.send(answer) {
-                    self.reg_table.remove(e.get_id());
+                    self.reg_table.remove(&e.get_id());
                 }
             }
             None => {}

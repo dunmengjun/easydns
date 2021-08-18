@@ -5,15 +5,15 @@ use crate::cache::CacheRecord;
 use std::fmt::{Display, Formatter};
 use std::any::Any;
 use crate::protocol_new::DnsAnswer;
+use crate::protocol_new::basic::BasicData;
 
 pub struct NoSuchNameAnswer {
-    header: Header,
-    question: Question,
+    data: BasicData,
 }
 
 impl Display for NoSuchNameAnswer {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "(NO_SUCH_NAME, {})", self.question.name)
+        write!(f, "(NO_SUCH_NAME, {})", self.data.get_name())
     }
 }
 
@@ -22,8 +22,9 @@ impl Answer for NoSuchNameAnswer {
         todo!()
     }
 
-    fn to_bytes(&self) -> &[u8] {
-        todo!()
+    fn to_bytes(&self) -> Vec<u8> {
+        let data = &self.data;
+        data.into()
     }
 
     fn as_any(&self) -> &(dyn Any + Send + Sync) {
@@ -35,19 +36,18 @@ impl Answer for NoSuchNameAnswer {
     }
 
     fn set_id(&mut self, id: u16) {
-        self.header.id = id;
+        self.data.set_id(id);
     }
 
-    fn get_id(&self) -> &u16 {
-        &self.header.id
+    fn get_id(&self) -> u16 {
+        self.data.get_id()
     }
 }
 
 impl NoSuchNameAnswer {
-    pub fn from(header: Header, question: Question) -> Self {
+    pub fn from(data: BasicData) -> Self {
         NoSuchNameAnswer {
-            header,
-            question,
+            data
         }
     }
 }

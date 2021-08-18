@@ -5,7 +5,7 @@ use crate::protocol_new::{unzip_domain};
 pub struct Question {
     pub name: String,
     pub _type: u16,
-    pub(crate) class: u16,
+    pub class: u16,
 }
 
 fn wrap_name(name: &String) -> Vec<u8> {
@@ -19,8 +19,8 @@ fn wrap_name(name: &String) -> Vec<u8> {
     vec
 }
 
-impl From<Question> for Vec<u8> {
-    fn from(question: Question) -> Self {
+impl From<&Question> for Vec<u8> {
+    fn from(question: &Question) -> Self {
         let mut result = Vec::new();
         result.extend(wrap_name(&question.name));
         result.extend(&question._type.to_be_bytes());
@@ -29,8 +29,8 @@ impl From<Question> for Vec<u8> {
     }
 }
 
-impl From<&mut Cursor<u8>> for Question {
-    fn from(cursor: &mut Cursor<u8>) -> Self {
+impl From<&Cursor<u8>> for Question {
+    fn from(cursor: &Cursor<u8>) -> Self {
         let name = unzip_domain(cursor);
         let _type = u16::from_be_bytes([cursor.take(), cursor.take()]);
         let class = u16::from_be_bytes([cursor.take(), cursor.take()]);
@@ -51,5 +51,13 @@ impl Question {
         self.is_legal()
             && self._type == 1
             && self.class == 1
+    }
+
+    pub fn new() -> Self {
+        Question {
+            name: String::new(),
+            _type: 0,
+            class: 0,
+        }
     }
 }

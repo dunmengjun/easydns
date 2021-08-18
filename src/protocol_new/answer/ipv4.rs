@@ -2,22 +2,23 @@ use crate::protocol_new::header::Header;
 use crate::protocol_new::question::Question;
 use crate::protocol_new::answer::Answer;
 use crate::cache::CacheRecord;
-use crate::protocol_new::answer::resource::Ipv4Resource;
+use crate::protocol_new::answer::resource::{Ipv4Resource, Resource};
 use std::fmt::{Display, Formatter};
 use std::any::Any;
 use crate::protocol_new::{DnsAnswer};
 use crate::protocol::DNSQuery;
 use std::net::Ipv4Addr;
+use crate::protocol_new::basic::{BasicData, BasicDataBuilder};
 
 pub struct Ipv4Answer {
-    header: Header,
-    question: Question,
+    data: BasicData,
     resources: Vec<Ipv4Resource>,
 }
 
 impl Display for Ipv4Answer {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "(IP, {}, {}, {})", self.question.name, self.resources[0].ttl, self.resources[0].data)
+        write!(f, "(IP, {}, {}, {})", self.data.get_name(),
+               self.resources[0].get_ttl(), self.resources[0].get_data())
     }
 }
 
@@ -26,8 +27,14 @@ impl Answer for Ipv4Answer {
         todo!()
     }
 
-    fn to_bytes(&self) -> &[u8] {
-        todo!()
+    fn to_bytes(&self) -> Vec<u8> {
+        let data = &self.data;
+        let mut vec: Vec<u8> = data.into();
+        self.resources.iter().for_each(|r| {
+            let resource: Vec<u8> = r.into();
+            vec.extend(resource)
+        });
+        vec
     }
 
     fn as_any(&self) -> &(dyn Any + Send + Sync) {
@@ -39,19 +46,18 @@ impl Answer for Ipv4Answer {
     }
 
     fn set_id(&mut self, id: u16) {
-        self.header.id = id;
+        self.data.set_id(id)
     }
 
-    fn get_id(&self) -> &u16 {
-        &self.header.id
+    fn get_id(&self) -> u16 {
+        self.data.get_id()
     }
 }
 
 impl Ipv4Answer {
-    pub fn from(header: Header, question: Question, resources: Vec<Ipv4Resource>) -> Self {
+    pub fn from(data: BasicData, resources: Vec<Ipv4Resource>) -> Self {
         Ipv4Answer {
-            header,
-            question,
+            data,
             resources,
         }
     }
@@ -61,20 +67,13 @@ impl Ipv4Answer {
         todo!()
     }
     pub fn empty_answer(id: u16, name: String) -> Self {
+        let data = BasicDataBuilder::new()
+            .id(id)
+            .name(name)
+            .flags(0x8180)
+            .build();
         Ipv4Answer {
-            header: Header {
-                id,
-                flags: 0x8180,
-                question_count: 1,
-                answer_count: 0,
-                authority_count: 0,
-                additional_count: 0,
-            },
-            question: Question {
-                name,
-                _type: 1,
-                class: 1,
-            },
+            data,
             resources: vec![],
         }
     }
@@ -93,6 +92,6 @@ impl Ipv4Answer {
         self.resources.retain(|r| {
             r.data.eq(ip)
         });
-        self.header.answer_count = 1;
+        self.data.set_answer_count(1);
     }
 }

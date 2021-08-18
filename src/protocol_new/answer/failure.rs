@@ -5,15 +5,15 @@ use crate::protocol_new::header::Header;
 use std::fmt::{Display, Formatter};
 use std::any::Any;
 use crate::protocol_new::DnsAnswer;
+use crate::protocol_new::basic::{BasicData, BasicDataBuilder};
 
 pub struct FailureAnswer {
-    header: Header,
-    question: Question,
+    data: BasicData,
 }
 
 impl Display for FailureAnswer {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "(FAILURE, {})", self.question.name)
+        write!(f, "(FAILURE, {})", self.data.get_name())
     }
 }
 
@@ -22,8 +22,9 @@ impl Answer for FailureAnswer {
         todo!()
     }
 
-    fn to_bytes(&self) -> &[u8] {
-        todo!()
+    fn to_bytes(&self) -> Vec<u8> {
+        let data = &self.data;
+        data.into()
     }
 
     fn as_any(&self) -> &(dyn Any + Send + Sync) {
@@ -35,37 +36,29 @@ impl Answer for FailureAnswer {
     }
 
     fn set_id(&mut self, id: u16) {
-        self.header.id = id;
+        self.data.set_id(id);
     }
 
-    fn get_id(&self) -> &u16 {
-        &self.header.id
+    fn get_id(&self) -> u16 {
+        self.data.get_id()
     }
 }
 
 impl FailureAnswer {
-    pub fn from(header: Header, question: Question) -> Self {
+    pub fn from(data: BasicData) -> Self {
         FailureAnswer {
-            header,
-            question,
+            data
         }
     }
 
     pub fn new(id: u16, name: String) -> Self {
+        let data = BasicDataBuilder::new()
+            .id(id)
+            .name(name)
+            .flags(0x8182)
+            .build();
         FailureAnswer {
-            header: Header {
-                id,
-                flags: 0x8182,
-                question_count: 1,
-                answer_count: 0,
-                authority_count: 0,
-                additional_count: 0,
-            },
-            question: Question {
-                name,
-                _type: 1,
-                class: 1,
-            },
+            data
         }
     }
 }

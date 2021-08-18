@@ -23,7 +23,7 @@ impl ClientSocket {
     }
 
     pub async fn back_to(&self, client: SocketAddr, answer: DnsAnswer) -> Result<()> {
-        self.socket.send_to(answer.to_bytes(), client).await?;
+        self.socket.send_to(answer.to_bytes().as_slice(), client).await?;
         Ok(())
     }
 }

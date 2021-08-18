@@ -10,7 +10,7 @@ const DC_FACTOR: u16 = 16383u16;
 const QUERY_ONLY_RECURSIVELY: u16 = 0x0100;
 const QUERY_RECURSIVELY_AD: u16 = 0x0120;
 
-fn parse_name(cursor: &mut Cursor<u8>, name_vec: &mut Vec<u8>) {
+fn parse_name(cursor: &Cursor<u8>, name_vec: &mut Vec<u8>) {
     if cursor.peek() & C_FACTOR == C_FACTOR {
         let c_index = u16::from_be_bytes([cursor.take(), cursor.take()]);
         cursor.tmp_at((c_index & DC_FACTOR) as usize, |buf| {
@@ -28,7 +28,7 @@ fn parse_name(cursor: &mut Cursor<u8>, name_vec: &mut Vec<u8>) {
     };
 }
 
-fn unzip_domain(cursor: &mut Cursor<u8>) -> Vec<u8> {
+fn unzip_domain(cursor: &Cursor<u8>) -> Vec<u8> {
     let mut domain_vec = Vec::new();
     parse_name(cursor, &mut domain_vec);
     domain_vec
@@ -58,7 +58,7 @@ impl Header {
         result.extend(&self.additional_count.to_be_bytes());
         result
     }
-    fn from(cursor: &mut Cursor<u8>) -> Self {
+    fn from(cursor: &Cursor<u8>) -> Self {
         let header = Header {
             id: u16::from_be_bytes([cursor.take(), cursor.take()]),
             flags: u16::from_be_bytes([cursor.take(), cursor.take()]),
@@ -101,7 +101,7 @@ impl Question {
         result
     }
 
-    fn from(cursor: &mut Cursor<u8>) -> Self {
+    fn from(cursor: &Cursor<u8>) -> Self {
         let name = unzip_domain(cursor);
         let _type = u16::from_be_bytes([cursor.take(), cursor.take()]);
         let class = u16::from_be_bytes([cursor.take(), cursor.take()]);
@@ -226,7 +226,7 @@ struct ResourceRecord {
 }
 
 impl ResourceRecord {
-    fn from(cursor: &mut Cursor<u8>) -> Self {
+    fn from(cursor: &Cursor<u8>) -> Self {
         let question = Question::from(cursor);
         let ttl = u32::from_be_bytes([cursor.take(),
             cursor.take(), cursor.take(), cursor.take()]);

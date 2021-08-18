@@ -20,64 +20,56 @@ pub type DnsAnswer = Box<dyn Answer>;
 pub use ipv4::Ipv4Answer;
 pub use failure::FailureAnswer;
 pub use soa::SoaAnswer;
+use crate::protocol_new::basic::BasicData;
 
 pub trait Answer: Display + Send + Sync {
     fn to_cache(&self) -> Option<CacheRecord>;
-    fn to_bytes(&self) -> &[u8];
+    fn to_bytes(&self) -> Vec<u8>;
     fn as_any(&self) -> &(dyn Any + Send + Sync);
     fn as_mut_any(&mut self) -> &mut (dyn Any + Send + Sync);
     fn set_id(&mut self, id: u16);
-    fn get_id(&self) -> &u16;
+    fn get_id(&self) -> u16;
 }
 
 impl From<AnswerBuf> for DnsAnswer {
     fn from(buf: AnswerBuf) -> Self {
         let mut cursor = Cursor::form(buf.into());
-        let mut header = Header::from(&mut cursor);
-        if header.answer_count == 0 && header.authority_count == 0 {
-            header.flags = 0x8182;
+        let data = BasicData::from(&cursor);
+        if data.get_flags() == 0x8182 {
+            return FailureAnswer::from(data).into();
         }
-        if header.question_count > 1 {
-            panic!("不支持一个请求里有多个域名查询")
-        }
-        let question = Question::from(&mut cursor);
-        if header.flags == 0x8182 {
-            return DnsAnswer::from(FailureAnswer::from(header, question));
-        }
-        if header.flags == 0x8183 {
-            return DnsAnswer::from(NoSuchNameAnswer::from(header, question));
+        if data.get_flags() == 0x8183 {
+            return NoSuchNameAnswer::from(data).into();
         }
         let mut ipv4_records = Vec::new();
-        (0..header.answer_count as usize).into_iter().for_each(|_| {
-            let temp = Question::from(&mut cursor);
-            let ttl = u32::from_be_bytes([cursor.take(),
-                cursor.take(), cursor.take(), cursor.take()]);
-            if temp._type == 5 {
+        (0..data.get_answer_count() as usize).into_iter().for_each(|_| {
+            let r_data = resource::BasicData::from(&cursor);
+            if r_data.get_type() == 5 {
                 // cname记录 目前的处理是移除
-                let _resource = CnameResource::from(temp.name.clone(), ttl, &mut cursor);
-            } else if temp._type == 1 {
+                let _resource = CnameResource::from(r_data, &cursor);
+            } else if r_data.get_type() == 1 {
                 // a记录
-                ipv4_records.push(Ipv4Resource::from(question.name.clone(), ttl, &mut cursor));
+                ipv4_records.push(Ipv4Resource::from(r_data, &cursor));
             } else {
-                panic!("不支持的应答资源记录类型: name = {}, type = {}", temp.name, temp._type)
+                panic!("不支持的应答资源记录类型: name = {}, type = {}",
+                       r_data.get_name(), r_data.get_type())
             };
         });
         let mut soa_records = Vec::new();
-        (0..header.authority_count as usize).into_iter().for_each(|_| {
-            let temp = Question::from(&mut cursor);
-            let ttl = u32::from_be_bytes([cursor.take(),
-                cursor.take(), cursor.take(), cursor.take()]);
-            if temp._type == 6 {
-                soa_records.push(SoaResource::from(question.name.clone(), ttl, &mut cursor));
+        (0..data.get_authority_count() as usize).into_iter().for_each(|_| {
+            let r_data = resource::BasicData::from(&cursor);
+            if r_data.get_type() == 6 {
+                soa_records.push(SoaResource::from(r_data, &cursor));
             } else {
-                panic!("不支持的认证资源记录类型: name = {}, type = {}", temp.name, temp._type)
+                panic!("不支持的认证资源记录类型: name = {}, type = {}",
+                       r_data.get_name(), r_data.get_type())
             }
         });
         if !ipv4_records.is_empty() {
-            return DnsAnswer::from(Ipv4Answer::from(header, question, ipv4_records));
+            return Ipv4Answer::from(data, ipv4_records).into();
         }
         if !soa_records.is_empty() {
-            return DnsAnswer::from(SoaAnswer::from(header, question, soa_records.remove(0)));
+            return SoaAnswer::from(data, soa_records.remove(0)).into();
         }
         unreachable!()
     }

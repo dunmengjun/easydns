@@ -1,21 +1,21 @@
-use crate::protocol_new::answer::resource::Resource;
+use crate::protocol_new::answer::resource::{Resource, BasicData};
 use crate::cursor::Cursor;
-use crate::protocol_new::unzip_domain;
+use crate::protocol_new::{unzip_domain, wrap_name};
+use crate::protocol_new::answer::resource::basic;
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct SoaResource {
-    name: String,
-    pub ttl: u32,
+    basic: BasicData,
     data: Soa,
 }
 
 impl Resource<Soa> for SoaResource {
     fn get_name(&self) -> &String {
-        &self.name
+        self.basic.get_name()
     }
 
     fn get_ttl(&self) -> u32 {
-        self.ttl
+        self.basic.get_ttl()
     }
 
     fn get_data(&self) -> &Soa {
@@ -23,28 +23,41 @@ impl Resource<Soa> for SoaResource {
     }
 }
 
+impl From<&SoaResource> for Vec<u8> {
+    fn from(r: &SoaResource) -> Self {
+        let data = &r.basic;
+        let mut vec: Vec<u8> = data.into();
+        let soa = &r.data;
+        let data_vec: Vec<u8> = soa.into();
+        vec.extend(data_vec);
+        vec
+    }
+}
+
 impl SoaResource {
-    pub fn from(name: String, ttl: u32, cursor: &mut Cursor<u8>) -> Self {
-        let _data_len = u16::from_be_bytes([cursor.take(), cursor.take()]);
+    pub fn from(basic: BasicData, cursor: &Cursor<u8>) -> Self {
         let data = Soa::from(cursor);
         SoaResource {
-            name,
-            ttl,
+            basic,
             data,
         }
     }
 
     pub fn new_wit_default_soa(name: String, ttl: u32) -> Self {
+        let basic = basic::Builder::new()
+            ._type(6)
+            .ttl(ttl)
+            .name(name)
+            .build();
         SoaResource {
-            name,
-            ttl,
+            basic,
             data: Soa::default(),
         }
     }
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-struct Soa {
+pub struct Soa {
     name_server: String,
     mailbox: String,
     serial_number: u32,
@@ -54,8 +67,22 @@ struct Soa {
     minimum_ttl: u32,
 }
 
+impl From<&Soa> for Vec<u8> {
+    fn from(s: &Soa) -> Self {
+        let mut vec = Vec::new();
+        vec.extend(wrap_name(&s.name_server));
+        vec.extend(wrap_name(&s.mailbox));
+        vec.extend(&s.serial_number.to_be_bytes());
+        vec.extend(&s.interval_refresh.to_be_bytes());
+        vec.extend(&s.interval_retry.to_be_bytes());
+        vec.extend(&s.expire_limit.to_be_bytes());
+        vec.extend(&s.minimum_ttl.to_be_bytes());
+        vec
+    }
+}
+
 impl Soa {
-    fn from(cursor: &mut Cursor<u8>) -> Self {
+    fn from(cursor: &Cursor<u8>) -> Self {
         let name_server = unzip_domain(cursor);
         let mailbox = unzip_domain(cursor);
         let serial_number = u32::from_be_bytes(cursor.take_bytes());
