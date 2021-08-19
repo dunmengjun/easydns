@@ -10,7 +10,7 @@ use crate::protocol_new::{DnsAnswer, FailureAnswer, DnsQuery};
 
 pub struct QueryExecutor {
     socket: Arc<UdpSocket>,
-    reg_table: Arc<DashMap<u16, Sender<DnsAnswer>>>,
+    reg_table: Arc<DashMap<u16, Sender<AnswerBuf>>>,
 }
 
 impl QueryExecutor {
@@ -52,7 +52,8 @@ impl QueryExecutor {
             .await?;
         let mut answer = match timeout(Duration::from_secs(3), receiver).await {
             Ok(result) => {
-                result?
+                let buf = result?;
+                DnsAnswer::from(buf)
             }
             Err(_) => {
                 FailureAnswer::new(client_query_id, query.get_name().clone()).into()
@@ -66,11 +67,11 @@ impl QueryExecutor {
     async fn recv(&self) -> Result<()> {
         let mut buf: AnswerBuf = default_value();
         self.socket.recv_from(&mut buf).await?;
-        let answer = DnsAnswer::from(buf);
-        match self.reg_table.remove(&answer.get_id()) {
+        let id = u16::from_be_bytes([buf[0], buf[1]]);
+        match self.reg_table.remove(&id) {
             Some((_, sender)) => {
-                if let Err(e) = sender.send(answer) {
-                    self.reg_table.remove(&e.get_id());
+                if let Err(_e) = sender.send(buf) {
+                    self.reg_table.remove(&id);
                 }
             }
             None => {}
