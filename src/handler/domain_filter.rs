@@ -3,7 +3,7 @@ use crate::filter::Filter;
 use std::sync::Arc;
 use crate::handler::{Clain, Handler};
 use crate::system::Result;
-use crate::protocol_new::{DnsAnswer, SoaAnswer, DnsQuery};
+use crate::protocol::{DnsAnswer, SoaAnswer, DnsQuery};
 
 #[derive(Clone)]
 pub struct DomainFilter {

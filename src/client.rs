@@ -1,7 +1,7 @@
 use tokio::net::UdpSocket;
 use std::net::SocketAddr;
 use crate::system::{Result, QueryBuf, default_value};
-use crate::protocol_new::DnsAnswer;
+use crate::protocol::DnsAnswer;
 
 pub struct ClientSocket {
     socket: UdpSocket,

@@ -1,9 +1,9 @@
-use crate::protocol_new::answer::Answer;
+use crate::protocol::answer::Answer;
 use crate::cache::{CacheRecord, SoaCacheRecord, CacheItem};
-use crate::protocol_new::answer::resource::{SoaResource, Resource};
+use crate::protocol::answer::resource::{SoaResource, Resource};
 use std::fmt::{Display, Formatter};
 use std::any::Any;
-use crate::protocol_new::basic::{BasicData, Builder};
+use crate::protocol::basic::{BasicData, Builder};
 use crate::system::get_now;
 
 pub struct SoaAnswer {

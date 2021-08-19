@@ -21,7 +21,7 @@ use crate::cache::cache_record::SOA_RECORD;
 use crate::cursor::Cursor;
 use async_trait::async_trait;
 use futures_util::future::BoxFuture;
-use crate::protocol_new::DnsAnswer;
+use crate::protocol::DnsAnswer;
 
 pub type CacheMap = LimitedMap<String, CacheRecord>;
 type ExpiredStrategy = Box<dyn CacheStrategy>;

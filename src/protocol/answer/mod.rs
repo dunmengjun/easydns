@@ -7,8 +7,8 @@ mod ipv4;
 use crate::cache::CacheRecord;
 use crate::system::AnswerBuf;
 use crate::cursor::Cursor;
-use crate::protocol_new::answer::resource::{CnameResource, Ipv4Resource, SoaResource};
-use crate::protocol_new::answer::no_such_name::NoSuchNameAnswer;
+use crate::protocol::answer::resource::{CnameResource, Ipv4Resource, SoaResource};
+use crate::protocol::answer::no_such_name::NoSuchNameAnswer;
 use std::fmt::{Display};
 use std::any::Any;
 
@@ -17,7 +17,7 @@ pub type DnsAnswer = Box<dyn Answer>;
 pub use ipv4::Ipv4Answer;
 pub use failure::FailureAnswer;
 pub use soa::SoaAnswer;
-use crate::protocol_new::basic::BasicData;
+use crate::protocol::basic::BasicData;
 
 pub trait Answer: Display + Send + Sync {
     fn to_cache(&self) -> Option<CacheRecord>;

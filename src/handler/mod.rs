@@ -14,7 +14,7 @@ use crate::handler::query_sender::QuerySender;
 use crate::system::{Result, QueryBuf};
 use crate::handler::server_group::ServerGroup;
 use std::option::Option::Some;
-use crate::protocol_new::{DnsAnswer, DnsQuery};
+use crate::protocol::{DnsAnswer, DnsQuery};
 
 mod legal_checker;
 mod cache_handler;

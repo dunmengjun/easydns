@@ -1,7 +1,7 @@
-use crate::protocol_new::answer::resource::{Resource, BasicData};
+use crate::protocol::answer::resource::{Resource, BasicData};
 use crate::cursor::Cursor;
-use crate::protocol_new::{unzip_domain, wrap_name};
-use crate::protocol_new::answer::resource::basic;
+use crate::protocol::{unzip_domain, wrap_name};
+use crate::protocol::answer::resource::basic;
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct SoaResource {

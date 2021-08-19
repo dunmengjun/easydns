@@ -1,5 +1,5 @@
-use crate::protocol_new::basic::BasicData;
-use crate::protocol_new::{basic};
+use crate::protocol::basic::BasicData;
+use crate::protocol::{basic};
 use crate::system::{QueryBuf, next_id};
 use crate::cursor::Cursor;
 

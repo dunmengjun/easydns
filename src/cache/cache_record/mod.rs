@@ -7,7 +7,7 @@ use crate::cache::limit_map::GetOrdKey;
 pub use ip_record::IpCacheRecord;
 pub use soa_record::SoaCacheRecord;
 use std::fmt::{Debug, Formatter};
-use crate::protocol_new::DnsAnswer;
+use crate::protocol::DnsAnswer;
 
 pub type CacheRecord = Box<dyn CacheItem>;
 
@@ -101,7 +101,7 @@ pub mod tests {
     use crate::cache::cache_record::BoxedClone;
     use crate::system::TIME;
     use crate::cache::limit_map::GetOrdKey;
-    use crate::protocol_new::{DnsAnswer, FailureAnswer};
+    use crate::protocol::{DnsAnswer, FailureAnswer};
 
     #[test]
     fn should_return_true_when_check_expired_given_expired() {

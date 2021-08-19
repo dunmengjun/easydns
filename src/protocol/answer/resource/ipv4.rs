@@ -1,8 +1,8 @@
-use crate::protocol_new::answer::resource::{Resource, BasicData};
+use crate::protocol::answer::resource::{Resource, BasicData};
 use crate::cursor::Cursor;
 use std::net::Ipv4Addr;
 use crate::cache::{IpCacheRecord, CacheItem};
-use crate::protocol_new::answer::resource::basic::Builder;
+use crate::protocol::answer::resource::basic::Builder;
 use crate::system::get_now;
 
 #[derive(Debug, Eq, PartialEq, Clone)]

@@ -1,4 +1,4 @@
-use crate::protocol_new::question::Question;
+use crate::protocol::question::Question;
 use crate::cursor::Cursor;
 
 #[derive(Debug, Eq, PartialEq, Clone)]

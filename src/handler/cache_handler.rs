@@ -4,7 +4,7 @@ use std::sync::Arc;
 use crate::handler::{Clain, Handler};
 use crate::system::{Result};
 use futures_util::FutureExt;
-use crate::protocol_new::{DnsAnswer, DnsQuery};
+use crate::protocol::{DnsAnswer, DnsQuery};
 
 #[derive(Clone)]
 pub struct CacheHandler {

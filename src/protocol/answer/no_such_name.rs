@@ -1,8 +1,8 @@
-use crate::protocol_new::answer::Answer;
+use crate::protocol::answer::Answer;
 use crate::cache::CacheRecord;
 use std::fmt::{Display, Formatter};
 use std::any::Any;
-use crate::protocol_new::basic::BasicData;
+use crate::protocol::basic::BasicData;
 
 pub struct NoSuchNameAnswer {
     data: BasicData,

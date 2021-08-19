@@ -1,7 +1,7 @@
 use crate::system::{get_now};
 use crate::cache::cache_record::{CacheItem, IP_RECORD};
 use crate::cursor::Cursor;
-use crate::protocol_new::{DnsAnswer, Ipv4Answer};
+use crate::protocol::{DnsAnswer, Ipv4Answer};
 use std::net::Ipv4Addr;
 
 #[derive(Clone, PartialOrd, PartialEq, Debug)]

@@ -6,7 +6,7 @@ use std::sync::Arc;
 use tokio::sync::oneshot;
 use tokio::time::timeout;
 use std::time::Duration;
-use crate::protocol_new::{DnsAnswer, FailureAnswer, DnsQuery};
+use crate::protocol::{DnsAnswer, FailureAnswer, DnsQuery};
 
 pub struct QueryExecutor {
     socket: Arc<UdpSocket>,

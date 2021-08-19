@@ -9,7 +9,7 @@ use crate::handler::server_group::fast_server_sender::FastServerSender;
 use crate::handler::server_group::prefer_server_sender::PreferServerSender;
 use crate::handler::server_group::combine_server_sender::CombineServerSender;
 use crate::handler::server_group::query_executor::QueryExecutor;
-use crate::protocol_new::{DnsAnswer, DnsQuery};
+use crate::protocol::{DnsAnswer, DnsQuery};
 
 #[async_trait]
 pub trait ServerSender: Sync + Send {

@@ -4,7 +4,7 @@ use std::sync::Arc;
 use crate::handler::{Clain, Handler};
 use crate::system::Result;
 use futures_util::future::select_all;
-use crate::protocol_new::{DnsAnswer, Ipv4Answer, DnsQuery};
+use crate::protocol::{DnsAnswer, Ipv4Answer, DnsQuery};
 use std::net::IpAddr;
 
 #[derive(Clone)]

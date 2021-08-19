@@ -1,7 +1,7 @@
 use crate::cache::cache_record::{CacheItem, SOA_RECORD};
 use crate::system::get_now;
 use crate::cursor::Cursor;
-use crate::protocol_new::{DnsAnswer, SoaAnswer};
+use crate::protocol::{DnsAnswer, SoaAnswer};
 
 #[derive(Clone, PartialOrd, PartialEq, Debug)]
 pub struct SoaCacheRecord {

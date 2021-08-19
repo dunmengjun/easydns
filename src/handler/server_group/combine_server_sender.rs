@@ -2,7 +2,7 @@ use crate::system::Result;
 use async_trait::async_trait;
 use crate::handler::server_group::query_executor::QueryExecutor;
 use crate::handler::server_group::ServerSender;
-use crate::protocol_new::{DnsAnswer, Ipv4Answer, FailureAnswer, DnsQuery};
+use crate::protocol::{DnsAnswer, Ipv4Answer, FailureAnswer, DnsQuery};
 
 pub struct CombineServerSender {
     executor: QueryExecutor,

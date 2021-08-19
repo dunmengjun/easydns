@@ -7,7 +7,7 @@ use futures_util::future::select_all;
 use tokio::time::interval;
 use crate::handler::server_group::query_executor::QueryExecutor;
 use crate::handler::server_group::ServerSender;
-use crate::protocol_new::{DnsAnswer, DnsQuery};
+use crate::protocol::{DnsAnswer, DnsQuery};
 
 pub struct FastServerSender {
     executor: Arc<QueryExecutor>,

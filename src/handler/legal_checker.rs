@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::handler::{Handler, Clain};
 use crate::system::Result;
 use crate::handler::server_group::ServerGroup;
-use crate::protocol_new::{DnsAnswer, DnsQuery};
+use crate::protocol::{DnsAnswer, DnsQuery};
 
 #[derive(Clone)]
 pub struct LegalChecker {

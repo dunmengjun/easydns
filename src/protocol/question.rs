@@ -1,5 +1,5 @@
 use crate::cursor::Cursor;
-use crate::protocol_new::{unzip_domain, wrap_name};
+use crate::protocol::{unzip_domain, wrap_name};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Question {

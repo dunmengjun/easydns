@@ -5,7 +5,7 @@ use std::time::Duration;
 use crate::system::Result;
 use crate::cache::cache_record::{CacheRecord, Expired};
 use async_trait::async_trait;
-use crate::protocol_new::DnsAnswer;
+use crate::protocol::DnsAnswer;
 
 pub struct TimeoutCacheStrategy {
     map: Arc<CacheMap>,

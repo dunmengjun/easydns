@@ -1,11 +1,11 @@
-use crate::protocol_new::answer::Answer;
+use crate::protocol::answer::Answer;
 use crate::cache::{CacheRecord, IpCacheRecord, CacheItem};
-use crate::protocol_new::answer::resource::{Ipv4Resource, Resource};
+use crate::protocol::answer::resource::{Ipv4Resource, Resource};
 use std::fmt::{Display, Formatter};
 use std::any::Any;
-use crate::protocol_new::{DnsAnswer};
+use crate::protocol::{DnsAnswer};
 use std::net::Ipv4Addr;
-use crate::protocol_new::basic::{BasicData, Builder};
+use crate::protocol::basic::{BasicData, Builder};
 
 pub struct Ipv4Answer {
     data: BasicData,
