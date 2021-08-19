@@ -42,7 +42,9 @@ impl Answer for NoSuchNameAnswer {
 }
 
 impl NoSuchNameAnswer {
-    pub fn from(data: BasicData) -> Self {
+    pub fn from(mut data: BasicData) -> Self {
+        data.set_answer_count(0);
+        data.set_authority_count(0);
         NoSuchNameAnswer {
             data
         }

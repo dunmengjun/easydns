@@ -29,6 +29,9 @@ impl BasicData {
     pub fn set_answer_count(&mut self, count: u16) {
         self.header.answer_count = count
     }
+    pub fn set_authority_count(&mut self, count: u16) {
+        self.header.authority_count = count
+    }
     pub fn get_id(&self) -> u16 {
         self.header.id
     }
