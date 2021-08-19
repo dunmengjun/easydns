@@ -46,10 +46,10 @@ impl From<AnswerBuf> for DnsAnswer {
             let r_data = resource::BasicData::from(&cursor);
             if r_data.get_type() == 5 {
                 // cname记录 目前的处理是移除
-                let _resource = CnameResource::from(r_data, &cursor);
+                let _resource = CnameResource::create(r_data, &cursor);
             } else if r_data.get_type() == 1 {
                 // a记录
-                ipv4_records.push(Ipv4Resource::from(r_data, &cursor));
+                ipv4_records.push(Ipv4Resource::create(r_data, &cursor));
             } else {
                 panic!("不支持的应答资源记录类型: name = {}, type = {}",
                        r_data.get_name(), r_data.get_type())
@@ -59,17 +59,17 @@ impl From<AnswerBuf> for DnsAnswer {
         (0..data.get_authority_count() as usize).into_iter().for_each(|_| {
             let r_data = resource::BasicData::from(&cursor);
             if r_data.get_type() == 6 {
-                soa_records.push(SoaResource::from(r_data, &cursor));
+                soa_records.push(SoaResource::create(r_data, &cursor));
             } else {
                 panic!("不支持的认证资源记录类型: name = {}, type = {}",
                        r_data.get_name(), r_data.get_type())
             }
         });
         if !ipv4_records.is_empty() {
-            return Ipv4Answer::from(data, ipv4_records).into();
+            return Ipv4Answer::create(data, ipv4_records).into();
         }
         if !soa_records.is_empty() {
-            return SoaAnswer::from(data, soa_records.remove(0)).into();
+            return SoaAnswer::create(data, soa_records.remove(0)).into();
         }
         unreachable!()
     }

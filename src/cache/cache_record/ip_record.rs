@@ -1,7 +1,7 @@
 use crate::system::{get_now};
 use crate::cache::cache_record::{CacheItem, IP_RECORD};
 use crate::cursor::Cursor;
-use crate::protocol_new::DnsAnswer;
+use crate::protocol_new::{DnsAnswer, Ipv4Answer};
 
 #[derive(Clone, PartialOrd, PartialEq, Debug)]
 pub struct IpCacheRecord {
@@ -29,7 +29,7 @@ impl CacheItem for IpCacheRecord {
     }
 
     fn to_answer(&self) -> DnsAnswer {
-        todo!()
+        Ipv4Answer::from(self).into()
     }
 }
 

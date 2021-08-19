@@ -1,7 +1,7 @@
 use crate::protocol_new::header::Header;
 use crate::protocol_new::question::Question;
 use crate::protocol_new::answer::Answer;
-use crate::cache::CacheRecord;
+use crate::cache::{CacheRecord, IpCacheRecord};
 use crate::protocol_new::answer::resource::{Ipv4Resource, Resource};
 use std::fmt::{Display, Formatter};
 use std::any::Any;
@@ -55,7 +55,7 @@ impl Answer for Ipv4Answer {
 }
 
 impl Ipv4Answer {
-    pub fn from(data: BasicData, resources: Vec<Ipv4Resource>) -> Self {
+    pub fn create(data: BasicData, resources: Vec<Ipv4Resource>) -> Self {
         Ipv4Answer {
             data,
             resources,
@@ -93,5 +93,11 @@ impl Ipv4Answer {
             r.data.eq(ip)
         });
         self.data.set_answer_count(1);
+    }
+}
+
+impl From<&IpCacheRecord> for Ipv4Answer {
+    fn from(_: &IpCacheRecord) -> Self {
+        todo!()
     }
 }
