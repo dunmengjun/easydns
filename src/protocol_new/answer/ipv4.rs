@@ -59,9 +59,21 @@ impl Ipv4Answer {
         }
     }
 
-    pub fn combine(&mut self, other: DnsAnswer) {
-        if let Some(answer) = other.as_any().downcast_ref::<Self>() {}
-        todo!()
+    pub fn combine(&mut self, mut other: DnsAnswer) {
+        if let Some(answer) = other.as_mut_any().downcast_mut::<Self>() {
+            if self.get_name() != answer.get_name() {
+                return;
+            }
+            while let Some(r) = answer.resources.pop() {
+                let flag = self.resources.iter().find(|e| {
+                    e.data != r.data
+                }).is_none();
+                if flag {
+                    self.resources.push(r);
+                }
+            }
+            self.data.set_answer_count(self.resources.len() as u16);
+        }
     }
     pub fn empty_answer(id: u16, name: String) -> Self {
         let data = Builder::new()
