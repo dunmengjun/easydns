@@ -1,5 +1,4 @@
 use crate::protocol_new::answer::resource::{Resource, BasicData};
-use crate::protocol_new::answer::resource::cname::CnameResource;
 use crate::cursor::Cursor;
 use std::net::Ipv4Addr;
 
@@ -24,7 +23,7 @@ impl Resource<Ipv4Addr> for Ipv4Resource {
 }
 
 impl From<&Ipv4Resource> for Vec<u8> {
-    fn from(mut r: &Ipv4Resource) -> Self {
+    fn from(r: &Ipv4Resource) -> Self {
         let data = &r.basic;
         let mut vec: Vec<u8> = data.into();
         vec.extend(&r.data.octets());

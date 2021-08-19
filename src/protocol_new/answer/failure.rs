@@ -1,11 +1,8 @@
-use crate::protocol_new::question::Question;
 use crate::protocol_new::answer::Answer;
 use crate::cache::CacheRecord;
-use crate::protocol_new::header::Header;
 use std::fmt::{Display, Formatter};
 use std::any::Any;
-use crate::protocol_new::DnsAnswer;
-use crate::protocol_new::basic::{BasicData, BasicDataBuilder};
+use crate::protocol_new::basic::{BasicData, Builder};
 
 pub struct FailureAnswer {
     data: BasicData,
@@ -52,7 +49,7 @@ impl FailureAnswer {
     }
 
     pub fn new(id: u16, name: String) -> Self {
-        let data = BasicDataBuilder::new()
+        let data = Builder::new()
             .id(id)
             .name(name)
             .flags(0x8182)

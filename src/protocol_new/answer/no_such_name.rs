@@ -1,10 +1,7 @@
-use crate::protocol_new::header::Header;
-use crate::protocol_new::question::Question;
 use crate::protocol_new::answer::Answer;
 use crate::cache::CacheRecord;
 use std::fmt::{Display, Formatter};
 use std::any::Any;
-use crate::protocol_new::DnsAnswer;
 use crate::protocol_new::basic::BasicData;
 
 pub struct NoSuchNameAnswer {

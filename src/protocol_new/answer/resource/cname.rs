@@ -1,4 +1,3 @@
-use crate::protocol_new::question::Question;
 use crate::cursor::Cursor;
 use crate::protocol_new::answer::resource::{Resource, BasicData};
 use crate::protocol_new::unzip_domain;

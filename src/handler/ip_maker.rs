@@ -1,11 +1,10 @@
 use async_trait::async_trait;
 use tokio_icmp::Pinger;
 use std::sync::Arc;
-use crate::protocol::{DNSQuery};
 use crate::handler::{Clain, Handler};
 use crate::system::Result;
 use futures_util::future::select_all;
-use crate::protocol_new::{DnsAnswer, Ipv4Answer};
+use crate::protocol_new::{DnsAnswer, Ipv4Answer, DnsQuery};
 use std::net::IpAddr;
 
 #[derive(Clone)]
@@ -23,7 +22,7 @@ impl IpChoiceMaker {
 
 #[async_trait]
 impl Handler for IpChoiceMaker {
-    async fn handle(&self, clain: Clain, query: DNSQuery) -> Result<DnsAnswer> {
+    async fn handle(&self, clain: Clain, query: DnsQuery) -> Result<DnsAnswer> {
         let mut answer = clain.next(query).await?;
         if let Some(ipv4_answer) = answer.as_mut_any().downcast_mut::<Ipv4Answer>() {
             let ip_vec = ipv4_answer.get_all_ips();
@@ -49,7 +48,7 @@ pub struct IpFirstMaker;
 
 #[async_trait]
 impl Handler for IpFirstMaker {
-    async fn handle(&self, clain: Clain, query: DNSQuery) -> Result<DnsAnswer> {
+    async fn handle(&self, clain: Clain, query: DnsQuery) -> Result<DnsAnswer> {
         let mut answer = clain.next(query).await?;
         if let Some(ipv4_answer) = answer.as_mut_any().downcast_mut::<Ipv4Answer>() {
             let vec = ipv4_answer.get_all_ips();

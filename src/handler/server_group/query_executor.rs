@@ -1,13 +1,12 @@
 use tokio::net::UdpSocket;
 use dashmap::DashMap;
-use crate::protocol::{DNSQuery};
 use tokio::sync::oneshot::Sender;
 use crate::system::{Result, next_id, AnswerBuf, default_value};
 use std::sync::Arc;
 use tokio::sync::oneshot;
 use tokio::time::timeout;
 use std::time::Duration;
-use crate::protocol_new::{DnsAnswer, FailureAnswer};
+use crate::protocol_new::{DnsAnswer, FailureAnswer, DnsQuery};
 
 pub struct QueryExecutor {
     socket: Arc<UdpSocket>,
@@ -41,19 +40,21 @@ impl QueryExecutor {
         })
     }
 
-    pub async fn exec(&self, address: &str, query: &DNSQuery) -> Result<DnsAnswer> {
+    pub async fn exec(&self, address: &str, mut query: DnsQuery) -> Result<DnsAnswer> {
         let (sender, receiver) = oneshot::channel();
         let next_id = next_id();
         self.reg_table.insert(next_id, sender);
+        query.set_id(next_id);
+        let query_vec: Vec<u8> = (&query).into();
         self.socket
-            .send_to(query.to_u8_with_id(next_id).as_slice(), address)
+            .send_to(query_vec.as_slice(), address)
             .await?;
         let mut answer = match timeout(Duration::from_secs(3), receiver).await {
             Ok(result) => {
                 result?
             }
             Err(_) => {
-                FailureAnswer::new(query.get_id().clone(), query.get_readable_domain()).into()
+                FailureAnswer::new(query.get_id().clone(), query.get_name().clone()).into()
             }
         };
         self.reg_table.remove(&next_id);

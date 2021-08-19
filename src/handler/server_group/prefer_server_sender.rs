@@ -1,11 +1,10 @@
-use crate::protocol::{DNSQuery};
 use async_trait::async_trait;
 use crate::system::Result;
 use futures_util::future::select_all;
 use futures_util::FutureExt;
 use crate::handler::server_group::query_executor::QueryExecutor;
 use crate::handler::server_group::ServerSender;
-use crate::protocol_new::DnsAnswer;
+use crate::protocol_new::{DnsAnswer, DnsQuery};
 
 pub struct PreferServerSender {
     executor: QueryExecutor,
@@ -14,11 +13,11 @@ pub struct PreferServerSender {
 
 #[async_trait]
 impl ServerSender for PreferServerSender {
-    async fn send(&self, query: &DNSQuery) -> Result<DnsAnswer> {
+    async fn send(&self, query: DnsQuery) -> Result<DnsAnswer> {
         let servers = &self.servers;
         let mut future_vec = Vec::with_capacity(servers.len());
         for address in servers.iter() {
-            future_vec.push(self.executor.exec(address.as_str(), &query).boxed());
+            future_vec.push(self.executor.exec(address.as_str(), query.clone()).boxed());
         }
         let (result, _, _) = select_all(future_vec).await;
         let answer = result?;

@@ -1,8 +1,8 @@
 use crate::protocol_new::header::Header;
 use crate::protocol_new::question::Question;
 use crate::cursor::Cursor;
-use std::rc::Rc;
 
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub struct BasicData {
     header: Header,
     question: Question,
@@ -10,12 +10,9 @@ pub struct BasicData {
 
 impl From<&Cursor<u8>> for BasicData {
     fn from(cursor: &Cursor<u8>) -> Self {
-        let mut header = Header::from(cursor);
-        if header.answer_count == 0 && header.authority_count == 0 {
-            header.flags = 0x8182;
-        }
+        let header = Header::from(cursor);
         if header.question_count > 1 {
-            panic!("不支持一个请求里有多个域名查询")
+            panic!("不支持多个域名查询")
         }
         let question = Question::from(cursor);
         BasicData {
@@ -35,11 +32,9 @@ impl BasicData {
     pub fn get_id(&self) -> u16 {
         self.header.id
     }
-
     pub fn get_flags(&self) -> u16 {
         self.header.flags
     }
-
     pub fn get_name(&self) -> &String {
         &self.question.name
     }
@@ -76,13 +71,13 @@ impl From<&BasicData> for Vec<u8> {
     }
 }
 
-pub struct BasicDataBuilder {
+pub struct Builder {
     data: Option<BasicData>,
 }
 
-impl BasicDataBuilder {
+impl Builder {
     pub fn new() -> Self {
-        BasicDataBuilder {
+        Builder {
             data: Some(BasicData::new())
         }
     }

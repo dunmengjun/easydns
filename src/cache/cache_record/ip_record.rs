@@ -5,7 +5,7 @@ use crate::protocol_new::{DnsAnswer, Ipv4Answer};
 
 #[derive(Clone, PartialOrd, PartialEq, Debug)]
 pub struct IpCacheRecord {
-    pub domain: Vec<u8>,
+    pub domain: String,
     pub address: Vec<u8>,
     pub create_time: u128,
     pub ttl_ms: u128,
@@ -20,7 +20,7 @@ impl CacheItem for IpCacheRecord {
         self.ttl_ms
     }
 
-    fn get_key(&self) -> &Vec<u8> {
+    fn get_key(&self) -> &String {
         &self.domain
     }
 
@@ -44,7 +44,7 @@ impl From<&IpCacheRecord> for Vec<u8> {
         let mut vec = Vec::<u8>::new();
         vec.push(IP_RECORD);//插入魔数
         vec.push(record.domain.len() as u8);
-        vec.extend(&record.domain);
+        vec.extend(record.domain.as_bytes());
         vec.push(4);
         vec.extend(&(record.get_remain_time(get_now()) as u32).to_be_bytes());
         vec.push(16);
@@ -57,10 +57,10 @@ impl From<&IpCacheRecord> for Vec<u8> {
 
 impl From<&[u8]> for IpCacheRecord {
     fn from(bytes: &[u8]) -> Self {
-        let mut cursor = Cursor::form(Vec::from(bytes).into());
+        let cursor = Cursor::form(Vec::from(bytes).into());
         cursor.take(); //删掉魔数
         let mut len = cursor.take() as usize;
-        let domain = Vec::from(cursor.take_slice(len));
+        let domain = String::from_utf8(Vec::from(cursor.take_slice(len))).unwrap();
         cursor.take();
         let ttl_ms = u32::from_be_bytes(cursor.take_bytes()) as u128;
         cursor.take();
@@ -128,7 +128,7 @@ pub mod tests {
 
     pub fn get_ip_record() -> IpCacheRecord {
         IpCacheRecord {
-            domain: vec![3, 119, 119, 119, 5, 98, 97, 105, 100, 117, 3, 99, 111, 109, 0],
+            domain: "www.baidu.com".to_string(),
             address: vec![1, 1, 1, 1],
             create_time: 0,
             ttl_ms: 1000,
@@ -143,7 +143,7 @@ pub mod tests {
 
     fn get_test_record() -> IpCacheRecord {
         IpCacheRecord {
-            domain: vec![],
+            domain: "".to_string(),
             address: vec![],
             create_time: 0,
             ttl_ms: 1000,

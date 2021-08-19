@@ -36,7 +36,7 @@ pub trait CacheItem: Sync + Send + BoxedClone {
     }
     fn get_create_time(&self) -> u128;
     fn get_ttl_ms(&self) -> u128;
-    fn get_key(&self) -> &Vec<u8>;
+    fn get_key(&self) -> &String;
     fn to_bytes(&self) -> Vec<u8>;
     fn to_answer(&self) -> DnsAnswer;
 }

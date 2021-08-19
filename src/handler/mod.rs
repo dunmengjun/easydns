@@ -11,11 +11,10 @@ use crate::handler::domain_filter::DomainFilter;
 use crate::handler::ip_maker::{IpChoiceMaker, IpFirstMaker};
 use crate::handler::legal_checker::LegalChecker;
 use crate::handler::query_sender::QuerySender;
-use crate::protocol::{DNSQuery};
 use crate::system::{Result, QueryBuf};
 use crate::handler::server_group::ServerGroup;
 use std::option::Option::Some;
-use crate::protocol_new::DnsAnswer;
+use crate::protocol_new::{DnsAnswer, DnsQuery};
 
 mod legal_checker;
 mod cache_handler;
@@ -70,7 +69,7 @@ impl HandlerContext {
             query_clain.add(IpFirstMaker);
         }
         query_clain.add(QuerySender::new(self.server_group.clone()));
-        query_clain.next(DNSQuery::from(buf)).await
+        query_clain.next(DnsQuery::from(buf)).await
     }
 }
 
@@ -87,12 +86,12 @@ impl Clain {
         self.funcs.push(Box::new(handler));
     }
 
-    async fn next(mut self, query: DNSQuery) -> Result<DnsAnswer> {
+    async fn next(mut self, query: DnsQuery) -> Result<DnsAnswer> {
         self.funcs.remove(0).handle(self, query).await
     }
 }
 
 #[async_trait]
 trait Handler: Send + Sync {
-    async fn handle(&self, clain: Clain, query: DNSQuery) -> Result<DnsAnswer>;
+    async fn handle(&self, clain: Clain, query: DnsQuery) -> Result<DnsAnswer>;
 }

@@ -2,17 +2,15 @@ mod header;
 mod question;
 mod answer;
 mod basic;
+mod query;
 
-use crate::cache::CacheRecord;
-use crate::system::AnswerBuf;
 use crate::cursor::Cursor;
-use header::Header;
-use question::Question;
 
 const C_FACTOR: u8 = 192u8;
 const DC_FACTOR: u16 = 16383u16;
 
 pub use answer::{DnsAnswer, Ipv4Answer, FailureAnswer, SoaAnswer};
+pub use query::DnsQuery;
 
 fn parse_name(cursor: &Cursor<u8>, name_vec: &mut Vec<u8>) {
     if cursor.peek() & C_FACTOR == C_FACTOR {

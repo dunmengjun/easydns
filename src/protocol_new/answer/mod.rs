@@ -5,15 +5,12 @@ mod soa;
 mod ipv4;
 
 use crate::cache::CacheRecord;
-use crate::protocol_new::question::Question;
 use crate::system::AnswerBuf;
 use crate::cursor::Cursor;
-use crate::protocol_new::header::Header;
 use crate::protocol_new::answer::resource::{CnameResource, Ipv4Resource, SoaResource};
 use crate::protocol_new::answer::no_such_name::NoSuchNameAnswer;
-use std::fmt::{Display, Formatter};
+use std::fmt::{Display};
 use std::any::Any;
-use crate::protocol::DNSQuery;
 
 pub type DnsAnswer = Box<dyn Answer>;
 
@@ -33,9 +30,12 @@ pub trait Answer: Display + Send + Sync {
 
 impl From<AnswerBuf> for DnsAnswer {
     fn from(buf: AnswerBuf) -> Self {
-        let mut cursor = Cursor::form(buf.into());
+        let cursor = Cursor::form(buf.into());
         let data = BasicData::from(&cursor);
         if data.get_flags() == 0x8182 {
+            return FailureAnswer::from(data).into();
+        }
+        if data.get_answer_count() == 0 && data.get_authority_count() == 0 {
             return FailureAnswer::from(data).into();
         }
         if data.get_flags() == 0x8183 {

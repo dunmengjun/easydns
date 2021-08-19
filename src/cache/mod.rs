@@ -23,7 +23,7 @@ use async_trait::async_trait;
 use futures_util::future::BoxFuture;
 use crate::protocol_new::DnsAnswer;
 
-pub type CacheMap = LimitedMap<Vec<u8>, CacheRecord>;
+pub type CacheMap = LimitedMap<String, CacheRecord>;
 type ExpiredStrategy = Box<dyn CacheStrategy>;
 type AnswerFuture = BoxFuture<'static, Result<DnsAnswer>>;
 
@@ -66,7 +66,7 @@ impl CachePool {
             map: limit_map,
         })
     }
-    pub async fn get(&self, key: Vec<u8>, future: AnswerFuture) -> Result<DnsAnswer> {
+    pub async fn get(&self, key: String, future: AnswerFuture) -> Result<DnsAnswer> {
         //从缓存map中取
         match self.map.get(&key) {
             //缓存中有
@@ -126,7 +126,7 @@ async fn create_map_by_config(config: &Config) -> Result<CacheMap> {
 
 fn create_map_by_vec_u8(config: &Config, file_vec: Vec<u8>) -> CacheMap {
     let map = LimitedMap::from(config.cache_num);
-    let mut cursor = Cursor::form(file_vec.into());
+    let cursor = Cursor::form(file_vec.into());
     let mut len = cursor.take() as usize;
     while len > 0 {
         let flag = cursor.peek();

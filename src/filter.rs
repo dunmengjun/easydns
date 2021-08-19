@@ -36,7 +36,7 @@ impl Filter {
         Filter { set }
     }
 
-    pub fn contain(&self, domain: String) -> bool {
+    pub fn contain(&self, domain: &String) -> bool {
         //拆分多级域名
         let split = domain.split(".");
         let vec: Vec<&str> = split.collect();

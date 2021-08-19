@@ -1,5 +1,4 @@
 use std::sync::{Arc, Mutex};
-use crate::protocol::{DNSQuery};
 use crate::system::Result;
 use tokio::time::Duration;
 use futures_util::FutureExt;
@@ -8,7 +7,7 @@ use futures_util::future::select_all;
 use tokio::time::interval;
 use crate::handler::server_group::query_executor::QueryExecutor;
 use crate::handler::server_group::ServerSender;
-use crate::protocol_new::DnsAnswer;
+use crate::protocol_new::{DnsAnswer, DnsQuery};
 
 pub struct FastServerSender {
     executor: Arc<QueryExecutor>,
@@ -18,7 +17,7 @@ pub struct FastServerSender {
 
 #[async_trait]
 impl ServerSender for FastServerSender {
-    async fn send(&self, query: &DNSQuery) -> Result<DnsAnswer> {
+    async fn send(&self, query: DnsQuery) -> Result<DnsAnswer> {
         let address = self.fast_server.lock().unwrap().clone();
         self.executor.exec(address.as_str(), query).await
     }
@@ -46,7 +45,7 @@ impl FastServerSender {
             let mut interval = interval(Duration::from_secs(duration_secs));
             loop {
                 interval.tick().await;
-                let test_query = DNSQuery::from_domain("www.baidu.com");
+                let test_query: DnsQuery = "www.baidu.com".into();
                 if let Err(e) = sender.preferred_dns_server(test_query).await {
                     error!("interval task upstream servers choose has error: {:?}", e)
                 }
@@ -60,17 +59,17 @@ impl FastServerSender {
         }
     }
 
-    async fn preferred_dns_server(&self, query: DNSQuery) -> Result<()> {
-        let (_, index) = self.get_answer_from_fast_server(&query).await?;
+    async fn preferred_dns_server(&self, query: DnsQuery) -> Result<()> {
+        let (_, index) = self.get_answer_from_fast_server(query).await?;
         *self.fast_server.lock().unwrap() = self.servers[index].clone();
         Ok(())
     }
 
-    async fn get_answer_from_fast_server(&self, query: &DNSQuery) -> Result<(DnsAnswer, usize)> {
+    async fn get_answer_from_fast_server(&self, query: DnsQuery) -> Result<(DnsAnswer, usize)> {
         let servers = &self.servers;
         let mut future_vec = Vec::with_capacity(servers.len());
         for address in servers.iter() {
-            future_vec.push(self.executor.exec(address.as_str(), &query).boxed());
+            future_vec.push(self.executor.exec(address.as_str(), query.clone()).boxed());
         }
         let (result, index, _) = select_all(future_vec).await;
         let answer = result?;

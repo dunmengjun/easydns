@@ -1,12 +1,9 @@
-use crate::protocol_new::header::Header;
-use crate::protocol_new::question::Question;
 use crate::protocol_new::answer::Answer;
 use crate::cache::{CacheRecord, SoaCacheRecord};
 use crate::protocol_new::answer::resource::{SoaResource, Resource};
 use std::fmt::{Display, Formatter};
 use std::any::Any;
-use crate::protocol_new::DnsAnswer;
-use crate::protocol_new::basic::{BasicData, BasicDataBuilder};
+use crate::protocol_new::basic::{BasicData, Builder};
 
 pub struct SoaAnswer {
     data: BasicData,
@@ -65,7 +62,7 @@ impl SoaAnswer {
     }
 
     pub fn default_soa(id: u16, name: String) -> Self {
-        let data = BasicDataBuilder::new()
+        let data = Builder::new()
             .id(id)
             .name(name.clone())
             .flags(0x8180)
