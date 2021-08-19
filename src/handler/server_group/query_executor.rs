@@ -42,6 +42,7 @@ impl QueryExecutor {
 
     pub async fn exec(&self, address: &str, mut query: DnsQuery) -> Result<DnsAnswer> {
         let (sender, receiver) = oneshot::channel();
+        let client_query_id = query.get_id();
         let next_id = next_id();
         self.reg_table.insert(next_id, sender);
         query.set_id(next_id);
@@ -54,11 +55,11 @@ impl QueryExecutor {
                 result?
             }
             Err(_) => {
-                FailureAnswer::new(query.get_id().clone(), query.get_name().clone()).into()
+                FailureAnswer::new(client_query_id, query.get_name().clone()).into()
             }
         };
         self.reg_table.remove(&next_id);
-        answer.set_id(query.get_id().clone());
+        answer.set_id(client_query_id);
         Ok(answer)
     }
 
