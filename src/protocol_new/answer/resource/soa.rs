@@ -35,8 +35,9 @@ impl From<&SoaResource> for Vec<u8> {
 }
 
 impl SoaResource {
-    pub fn create(basic: BasicData, cursor: &Cursor<u8>) -> Self {
+    pub fn create(mut basic: BasicData, cursor: &Cursor<u8>) -> Self {
         let data = Soa::from(cursor);
+        basic.set_data_len(data.len as u16);
         SoaResource {
             basic,
             data,
@@ -44,14 +45,16 @@ impl SoaResource {
     }
 
     pub fn new_with_default_soa(name: String, ttl: u32) -> Self {
+        let soa = Soa::default();
         let basic = basic::Builder::new()
             ._type(6)
             .ttl(ttl)
             .name(name)
+            .data_len(soa.len as u16)
             .build();
         SoaResource {
             basic,
-            data: Soa::default(),
+            data: soa,
         }
     }
 }
@@ -65,6 +68,7 @@ pub struct Soa {
     interval_retry: u32,
     expire_limit: u32,
     minimum_ttl: u32,
+    len: usize,
 }
 
 impl From<&Soa> for Vec<u8> {
@@ -90,6 +94,7 @@ impl Soa {
         let interval_retry = u32::from_be_bytes(cursor.take_bytes());
         let expire_limit = u32::from_be_bytes(cursor.take_bytes());
         let minimum_ttl = u32::from_be_bytes(cursor.take_bytes());
+        let len = name_server.len() + 2 + mailbox.len() + 2 + 20;
         Soa {
             name_server,
             mailbox,
@@ -98,6 +103,7 @@ impl Soa {
             interval_retry,
             expire_limit,
             minimum_ttl,
+            len,
         }
     }
 
@@ -110,6 +116,7 @@ impl Soa {
             interval_retry: 1200,
             expire_limit: 3600,
             minimum_ttl: 600,
+            len: 19 + 24 + 20,
         }
     }
 }

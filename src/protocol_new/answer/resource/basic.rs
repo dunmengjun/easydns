@@ -95,6 +95,14 @@ impl Builder {
         self
     }
 
+    pub fn data_len(mut self, data_len: u16) -> Self {
+        self.data.as_mut().map(|e| {
+            e.data_len = data_len;
+            e
+        });
+        self
+    }
+
     pub fn build(mut self) -> BasicData {
         self.data.take().unwrap()
     }
