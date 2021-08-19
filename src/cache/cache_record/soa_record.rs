@@ -69,7 +69,7 @@ impl From<&SoaAnswer> for SoaCacheRecord {
         SoaCacheRecord {
             domain: answer.get_name().clone(),
             create_time: get_now(),
-            ttl_ms: answer.get_ttl() as u128,
+            ttl_ms: answer.get_ttl() as u128 * 1000,
         }
     }
 }

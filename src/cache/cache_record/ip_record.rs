@@ -83,7 +83,7 @@ impl From<&Ipv4Answer> for IpCacheRecord {
             domain: answer.get_name().clone(),
             address: answer.get_address().clone(),
             create_time: get_now(),
-            ttl_ms: answer.get_ttl() as u128,
+            ttl_ms: answer.get_ttl() as u128 * 1000,
         }
     }
 }

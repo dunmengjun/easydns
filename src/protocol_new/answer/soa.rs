@@ -25,7 +25,7 @@ impl From<&SoaCacheRecord> for SoaAnswer {
             .authority(1)
             .build();
         let resource = SoaResource::new_with_default_soa(
-            record.get_key().clone(), record.get_remain_time(get_now()) as u32);
+            record.get_key().clone(), record.get_remain_time(get_now()) as u32 / 1000);
         SoaAnswer {
             data,
             resource,

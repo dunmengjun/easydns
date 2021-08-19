@@ -52,8 +52,11 @@ impl Answer for Ipv4Answer {
 }
 
 impl Ipv4Answer {
-    pub fn create(mut data: BasicData, resources: Vec<Ipv4Resource>) -> Self {
+    pub fn create(mut data: BasicData, mut resources: Vec<Ipv4Resource>) -> Self {
         data.set_authority_count(0);
+        resources.iter_mut().for_each(|e| {
+            e.set_name(data.get_name().clone());
+        });
         Ipv4Answer {
             data,
             resources,

@@ -38,8 +38,9 @@ impl From<&IpCacheRecord> for Ipv4Resource {
     fn from(record: &IpCacheRecord) -> Self {
         let basic = Builder::new()
             .name(record.get_key().clone())
-            .ttl(record.get_remain_time(get_now()) as u32)
+            .ttl((record.get_remain_time(get_now()) / 1000) as u32)
             ._type(1)
+            .data_len(4)
             .build();
         Ipv4Resource {
             basic,
@@ -55,5 +56,9 @@ impl Ipv4Resource {
             basic,
             data,
         }
+    }
+
+    pub fn set_name(&mut self, name: String) {
+        self.basic.set_name(name);
     }
 }
