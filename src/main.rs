@@ -11,7 +11,6 @@ use crate::client::ClientSocket;
 
 mod config;
 mod filter;
-mod protocol;
 mod system;
 mod handler;
 mod cache;
