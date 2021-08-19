@@ -33,7 +33,7 @@ impl From<&Ipv4Resource> for Vec<u8> {
 }
 
 impl Ipv4Resource {
-    pub fn from(basic: BasicData, cursor: &Cursor<u8>) -> Self {
+    pub fn create(basic: BasicData, cursor: &Cursor<u8>) -> Self {
         let data = Ipv4Addr::from(cursor.take_bytes());
         Ipv4Resource {
             basic,

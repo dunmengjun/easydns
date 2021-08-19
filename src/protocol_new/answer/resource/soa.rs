@@ -35,7 +35,7 @@ impl From<&SoaResource> for Vec<u8> {
 }
 
 impl SoaResource {
-    pub fn from(basic: BasicData, cursor: &Cursor<u8>) -> Self {
+    pub fn create(basic: BasicData, cursor: &Cursor<u8>) -> Self {
         let data = Soa::from(cursor);
         SoaResource {
             basic,

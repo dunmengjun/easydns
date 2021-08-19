@@ -1,7 +1,7 @@
 use crate::protocol_new::header::Header;
 use crate::protocol_new::question::Question;
 use crate::protocol_new::answer::Answer;
-use crate::cache::CacheRecord;
+use crate::cache::{CacheRecord, SoaCacheRecord};
 use crate::protocol_new::answer::resource::{SoaResource, Resource};
 use std::fmt::{Display, Formatter};
 use std::any::Any;
@@ -16,6 +16,12 @@ pub struct SoaAnswer {
 impl Display for SoaAnswer {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "(SOA, {}, {})", self.data.get_name(), self.resource.get_ttl())
+    }
+}
+
+impl From<&SoaCacheRecord> for SoaAnswer {
+    fn from(_: &SoaCacheRecord) -> Self {
+        todo!()
     }
 }
 
@@ -51,7 +57,7 @@ impl Answer for SoaAnswer {
 }
 
 impl SoaAnswer {
-    pub fn from(data: BasicData, resource: SoaResource) -> Self {
+    pub fn create(data: BasicData, resource: SoaResource) -> Self {
         SoaAnswer {
             data,
             resource,

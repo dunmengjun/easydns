@@ -24,7 +24,7 @@ impl Resource<String> for CnameResource {
 }
 
 impl CnameResource {
-    pub fn from(basic: BasicData, cursor: &Cursor<u8>) -> Self {
+    pub fn create(basic: BasicData, cursor: &Cursor<u8>) -> Self {
         let data = unzip_domain(cursor);
         CnameResource {
             basic,
