@@ -65,7 +65,8 @@ impl Answer for SoaAnswer {
 }
 
 impl SoaAnswer {
-    pub fn create(data: BasicData, resource: SoaResource) -> Self {
+    pub fn create(data: BasicData, mut resource: SoaResource) -> Self {
+        resource.set_name(data.get_name().clone());
         SoaAnswer {
             data,
             resource,

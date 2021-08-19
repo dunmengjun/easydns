@@ -30,6 +30,7 @@ pub trait Answer: Display + Send + Sync {
 
 impl From<AnswerBuf> for DnsAnswer {
     fn from(buf: AnswerBuf) -> Self {
+        // info!("buf: {:?}", &buf[0..buf.len()]);
         let cursor = Cursor::form(buf.into());
         let data = BasicData::from(&cursor);
         if data.get_flags() == 0x8182 {

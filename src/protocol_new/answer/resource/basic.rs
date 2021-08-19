@@ -36,6 +36,10 @@ impl BasicData {
         &self.question.name
     }
 
+    pub fn set_name(&mut self, name: String) {
+        self.question.name = name;
+    }
+
     pub fn get_ttl(&self) -> u32 {
         self.ttl
     }

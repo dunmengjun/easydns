@@ -57,11 +57,67 @@ impl SoaResource {
             data: soa,
         }
     }
+
+    pub fn set_name(&mut self, name: String) {
+        self.basic.set_name(name)
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct NameServer {
+    domain: String,
+    len: usize,
+}
+
+impl From<&Cursor<u8>> for NameServer {
+    fn from(cursor: &Cursor<u8>) -> Self {
+        if cursor.peek() == 0 {
+            cursor.take();
+            NameServer {
+                domain: ".".to_string(),
+                len: 1,
+            }
+        } else {
+            let domain = unzip_domain(cursor);
+            let len = domain.len() + 2;
+            NameServer {
+                domain,
+                len,
+            }
+        }
+    }
+}
+
+impl From<&str> for NameServer {
+    fn from(str: &str) -> Self {
+        NameServer {
+            domain: str.to_string(),
+            len: 2 + str.len(),
+        }
+    }
+}
+
+impl From<&NameServer> for Vec<u8> {
+    fn from(name_server: &NameServer) -> Self {
+        let mut vec = Vec::new();
+        if name_server.domain.eq(".") {
+            vec.push(0u8);
+        } else {
+            vec.extend(wrap_name(&name_server.domain));
+        }
+        vec
+    }
+}
+
+impl NameServer {
+    fn len(&self) -> usize {
+        self.len
+    }
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct Soa {
-    name_server: String,
+    name_server: NameServer,
     mailbox: String,
     serial_number: u32,
     interval_refresh: u32,
@@ -73,8 +129,8 @@ pub struct Soa {
 
 impl From<&Soa> for Vec<u8> {
     fn from(s: &Soa) -> Self {
-        let mut vec = Vec::new();
-        vec.extend(wrap_name(&s.name_server));
+        let server = &s.name_server;
+        let mut vec: Vec<u8> = server.into();
         vec.extend(wrap_name(&s.mailbox));
         vec.extend(&s.serial_number.to_be_bytes());
         vec.extend(&s.interval_refresh.to_be_bytes());
@@ -87,14 +143,14 @@ impl From<&Soa> for Vec<u8> {
 
 impl Soa {
     fn from(cursor: &Cursor<u8>) -> Self {
-        let name_server = unzip_domain(cursor);
+        let name_server = NameServer::from(cursor);
         let mailbox = unzip_domain(cursor);
         let serial_number = u32::from_be_bytes(cursor.take_bytes());
         let interval_refresh = u32::from_be_bytes(cursor.take_bytes());
         let interval_retry = u32::from_be_bytes(cursor.take_bytes());
         let expire_limit = u32::from_be_bytes(cursor.take_bytes());
         let minimum_ttl = u32::from_be_bytes(cursor.take_bytes());
-        let len = name_server.len() + 2 + mailbox.len() + 2 + 20;
+        let len = name_server.len() + mailbox.len() + 2 + 20;
         Soa {
             name_server,
             mailbox,
@@ -108,15 +164,17 @@ impl Soa {
     }
 
     fn default() -> Self {
+        let name_server = NameServer::from("dns17.hichina.com");
+        let len = name_server.len();
         Soa {
-            name_server: "dns17.hichina.com".to_string(),
+            name_server,
             mailbox: "hostmaster.hichina.com".to_string(),
             serial_number: 1,
             interval_refresh: 3600,
             interval_retry: 1200,
             expire_limit: 3600,
             minimum_ttl: 600,
-            len: 19 + 24 + 20,
+            len: len + 24 + 20,
         }
     }
 }
