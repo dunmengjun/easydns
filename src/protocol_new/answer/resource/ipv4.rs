@@ -1,6 +1,9 @@
 use crate::protocol_new::answer::resource::{Resource, BasicData};
 use crate::cursor::Cursor;
 use std::net::Ipv4Addr;
+use crate::cache::{IpCacheRecord, CacheItem};
+use crate::protocol_new::answer::resource::basic::Builder;
+use crate::system::get_now;
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct Ipv4Resource {
@@ -28,6 +31,20 @@ impl From<&Ipv4Resource> for Vec<u8> {
         let mut vec: Vec<u8> = data.into();
         vec.extend(&r.data.octets());
         vec
+    }
+}
+
+impl From<&IpCacheRecord> for Ipv4Resource {
+    fn from(record: &IpCacheRecord) -> Self {
+        let basic = Builder::new()
+            .name(record.get_key().clone())
+            .ttl(record.get_remain_time(get_now()) as u32)
+            ._type(1)
+            .build();
+        Ipv4Resource {
+            basic,
+            data: record.get_address().clone(),
+        }
     }
 }
 

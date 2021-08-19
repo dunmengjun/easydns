@@ -50,7 +50,7 @@ impl BasicData {
 
     fn new() -> Self {
         let mut question = Question::new();
-        question._type = 1;
+        question._type = 0;
         question.class = 1;
         BasicData {
             question,

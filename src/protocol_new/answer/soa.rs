@@ -1,9 +1,10 @@
 use crate::protocol_new::answer::Answer;
-use crate::cache::{CacheRecord, SoaCacheRecord};
+use crate::cache::{CacheRecord, SoaCacheRecord, CacheItem};
 use crate::protocol_new::answer::resource::{SoaResource, Resource};
 use std::fmt::{Display, Formatter};
 use std::any::Any;
 use crate::protocol_new::basic::{BasicData, Builder};
+use crate::system::get_now;
 
 pub struct SoaAnswer {
     data: BasicData,
@@ -17,14 +18,24 @@ impl Display for SoaAnswer {
 }
 
 impl From<&SoaCacheRecord> for SoaAnswer {
-    fn from(_: &SoaCacheRecord) -> Self {
-        todo!()
+    fn from(record: &SoaCacheRecord) -> Self {
+        let data = Builder::new()
+            .name(record.get_key().clone())
+            .flags(0x8180)
+            .authority(1)
+            .build();
+        let resource = SoaResource::new_with_default_soa(
+            record.get_key().clone(), record.get_remain_time(get_now()) as u32);
+        SoaAnswer {
+            data,
+            resource,
+        }
     }
 }
 
 impl Answer for SoaAnswer {
     fn to_cache(&self) -> Option<CacheRecord> {
-        todo!()
+        Some(SoaCacheRecord::from(self).into())
     }
 
     fn to_bytes(&self) -> Vec<u8> {
@@ -70,7 +81,15 @@ impl SoaAnswer {
             .build();
         SoaAnswer {
             data,
-            resource: SoaResource::new_wit_default_soa(name, 600),
+            resource: SoaResource::new_with_default_soa(name, 600),
         }
+    }
+
+    pub fn get_name(&self) -> &String {
+        self.data.get_name()
+    }
+
+    pub fn get_ttl(&self) -> u32 {
+        self.resource.get_ttl()
     }
 }

@@ -114,6 +114,14 @@ impl Builder {
         self
     }
 
+    pub fn answer(mut self, count: u16) -> Self {
+        self.data.as_mut().map(|e| {
+            e.header.answer_count = count;
+            e
+        });
+        self
+    }
+
     pub fn build(mut self) -> BasicData {
         self.data.take().unwrap()
     }

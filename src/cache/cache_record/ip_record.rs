@@ -2,11 +2,12 @@ use crate::system::{get_now};
 use crate::cache::cache_record::{CacheItem, IP_RECORD};
 use crate::cursor::Cursor;
 use crate::protocol_new::{DnsAnswer, Ipv4Answer};
+use std::net::Ipv4Addr;
 
 #[derive(Clone, PartialOrd, PartialEq, Debug)]
 pub struct IpCacheRecord {
     pub domain: String,
-    pub address: Vec<u8>,
+    pub address: Ipv4Addr,
     pub create_time: u128,
     pub ttl_ms: u128,
 }
@@ -34,7 +35,7 @@ impl CacheItem for IpCacheRecord {
 }
 
 impl IpCacheRecord {
-    pub fn get_address(&self) -> &Vec<u8> {
+    pub fn get_address(&self) -> &Ipv4Addr {
         &self.address
     }
 }
@@ -49,8 +50,8 @@ impl From<&IpCacheRecord> for Vec<u8> {
         vec.extend(&(record.get_remain_time(get_now()) as u32).to_be_bytes());
         vec.push(16);
         vec.extend(&record.create_time.to_be_bytes());
-        vec.push(record.address.len() as u8);
-        vec.extend(&record.address);
+        vec.push(4);
+        vec.extend(&record.address.octets());
         vec
     }
 }
@@ -59,19 +60,30 @@ impl From<&[u8]> for IpCacheRecord {
     fn from(bytes: &[u8]) -> Self {
         let cursor = Cursor::form(Vec::from(bytes).into());
         cursor.take(); //删掉魔数
-        let mut len = cursor.take() as usize;
+        let len = cursor.take() as usize;
         let domain = String::from_utf8(Vec::from(cursor.take_slice(len))).unwrap();
         cursor.take();
         let ttl_ms = u32::from_be_bytes(cursor.take_bytes()) as u128;
         cursor.take();
         let create_time = u128::from_be_bytes(cursor.take_bytes());
-        len = cursor.take() as usize;
-        let address = Vec::from(cursor.take_slice(len));
+        cursor.take();
+        let address = Ipv4Addr::from(cursor.take_bytes());
         IpCacheRecord {
             domain,
             address,
             create_time,
             ttl_ms,
+        }
+    }
+}
+
+impl From<&Ipv4Answer> for IpCacheRecord {
+    fn from(answer: &Ipv4Answer) -> Self {
+        IpCacheRecord {
+            domain: answer.get_name().clone(),
+            address: answer.get_address().clone(),
+            create_time: get_now(),
+            ttl_ms: answer.get_ttl() as u128,
         }
     }
 }
@@ -82,6 +94,7 @@ pub mod tests {
     use crate::system::{TIME, get_now};
     use crate::cache::limit_map::GetOrdKey;
     use crate::protocol::tests::get_ip_answer;
+    use std::net::Ipv4Addr;
 
     #[test]
     fn should_return_valid_record_when_create_from_bytes_given_valid_bytes() {
@@ -129,22 +142,7 @@ pub mod tests {
     pub fn get_ip_record() -> IpCacheRecord {
         IpCacheRecord {
             domain: "www.baidu.com".to_string(),
-            address: vec![1, 1, 1, 1],
-            create_time: 0,
-            ttl_ms: 1000,
-        }
-    }
-
-    pub fn build_ip_record(f: fn(&mut IpCacheRecord)) -> IpCacheRecord {
-        let mut record = get_ip_record();
-        f(&mut record);
-        record
-    }
-
-    fn get_test_record() -> IpCacheRecord {
-        IpCacheRecord {
-            domain: "".to_string(),
-            address: vec![],
+            address: Ipv4Addr::from([1, 1, 1, 1]),
             create_time: 0,
             ttl_ms: 1000,
         }

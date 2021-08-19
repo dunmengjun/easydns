@@ -6,7 +6,6 @@ use crate::protocol_new::{DnsAnswer, SoaAnswer};
 #[derive(Clone, PartialOrd, PartialEq, Debug)]
 pub struct SoaCacheRecord {
     pub domain: String,
-    pub data: Vec<u8>,
     pub create_time: u128,
     pub ttl_ms: u128,
 }
@@ -33,12 +32,6 @@ impl CacheItem for SoaCacheRecord {
     }
 }
 
-impl SoaCacheRecord {
-    pub fn get_data(&self) -> &Vec<u8> {
-        &self.data
-    }
-}
-
 impl From<&SoaCacheRecord> for Vec<u8> {
     fn from(record: &SoaCacheRecord) -> Self {
         let mut vec = Vec::<u8>::new();
@@ -49,8 +42,6 @@ impl From<&SoaCacheRecord> for Vec<u8> {
         vec.extend(&(record.get_remain_time(get_now()) as u32).to_be_bytes());
         vec.push(16);
         vec.extend(&record.create_time.to_be_bytes());
-        vec.push(record.data.len() as u8);
-        vec.extend(&record.data);
         vec
     }
 }
@@ -59,19 +50,26 @@ impl From<&[u8]> for SoaCacheRecord {
     fn from(bytes: &[u8]) -> Self {
         let cursor = Cursor::form(Vec::from(bytes).into());
         cursor.take();//删掉魔数
-        let mut len = cursor.take() as usize;
+        let len = cursor.take() as usize;
         let domain = String::from_utf8(Vec::from(cursor.take_slice(len))).unwrap();
         cursor.take();
         let ttl_ms = u32::from_be_bytes(cursor.take_bytes()) as u128;
         cursor.take();
         let create_time = u128::from_be_bytes(cursor.take_bytes());
-        len = cursor.take() as usize;
-        let data = Vec::from(cursor.take_slice(len));
         SoaCacheRecord {
             domain,
-            data,
             create_time,
             ttl_ms,
+        }
+    }
+}
+
+impl From<&SoaAnswer> for SoaCacheRecord {
+    fn from(answer: &SoaAnswer) -> Self {
+        SoaCacheRecord {
+            domain: answer.get_name().clone(),
+            create_time: get_now(),
+            ttl_ms: answer.get_ttl() as u128,
         }
     }
 }
@@ -128,7 +126,6 @@ mod tests {
     pub fn get_soa_record() -> SoaCacheRecord {
         SoaCacheRecord {
             domain: "www.baidu.com".to_string(),
-            data: vec![1, 1, 1, 1],
             create_time: 0,
             ttl_ms: 1000,
         }

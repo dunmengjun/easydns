@@ -43,7 +43,7 @@ impl SoaResource {
         }
     }
 
-    pub fn new_wit_default_soa(name: String, ttl: u32) -> Self {
+    pub fn new_with_default_soa(name: String, ttl: u32) -> Self {
         let basic = basic::Builder::new()
             ._type(6)
             .ttl(ttl)

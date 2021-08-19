@@ -1,5 +1,5 @@
 use crate::protocol_new::answer::Answer;
-use crate::cache::{CacheRecord, IpCacheRecord};
+use crate::cache::{CacheRecord, IpCacheRecord, CacheItem};
 use crate::protocol_new::answer::resource::{Ipv4Resource, Resource};
 use std::fmt::{Display, Formatter};
 use std::any::Any;
@@ -21,7 +21,7 @@ impl Display for Ipv4Answer {
 
 impl Answer for Ipv4Answer {
     fn to_cache(&self) -> Option<CacheRecord> {
-        todo!()
+        Some(IpCacheRecord::from(self).into())
     }
 
     fn to_bytes(&self) -> Vec<u8> {
@@ -91,10 +91,31 @@ impl Ipv4Answer {
         });
         self.data.set_answer_count(1);
     }
+
+    pub fn get_name(&self) -> &String {
+        self.data.get_name()
+    }
+
+    pub fn get_ttl(&self) -> u32 {
+        self.resources[0].get_ttl()
+    }
+
+    pub fn get_address(&self) -> &Ipv4Addr {
+        self.resources[0].get_data()
+    }
 }
 
 impl From<&IpCacheRecord> for Ipv4Answer {
-    fn from(_: &IpCacheRecord) -> Self {
-        todo!()
+    fn from(record: &IpCacheRecord) -> Self {
+        let data = Builder::new()
+            .flags(0x8180)
+            .name(record.get_key().clone())
+            .answer(1)
+            .build();
+        let resource = Ipv4Resource::from(record);
+        Ipv4Answer {
+            data,
+            resources: vec![resource],
+        }
     }
 }

@@ -1,8 +1,5 @@
 use crate::cursor::Cursor;
 
-const QUERY_ONLY_RECURSIVELY: u16 = 0x0100;
-const QUERY_RECURSIVELY_AD: u16 = 0x0120;
-
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Header {
     pub id: u16,
@@ -42,19 +39,6 @@ impl From<&Cursor<u8>> for Header {
 }
 
 impl Header {
-    fn is_legal(&self) -> bool {
-        !(self.answer_count > 0)
-    }
-
-    pub fn is_supported(&self) -> bool {
-        let flag_supported =
-            self.flags == QUERY_ONLY_RECURSIVELY
-                || self.flags == QUERY_RECURSIVELY_AD;
-        self.is_legal()
-            && flag_supported
-            && self.question_count == 1
-    }
-
     pub fn new() -> Self {
         Header {
             id: 0,
