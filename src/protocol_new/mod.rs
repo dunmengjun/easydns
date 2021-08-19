@@ -25,8 +25,6 @@ fn parse_name(cursor: &Cursor<u8>, name_vec: &mut Vec<u8>) {
             name_vec.push('.' as u8);
             name_vec.extend(segment);
             parse_name(cursor, name_vec)
-        } else {
-            cursor.take();
         }
     };
 }
