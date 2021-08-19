@@ -42,7 +42,9 @@ impl Answer for FailureAnswer {
 }
 
 impl FailureAnswer {
-    pub fn from(data: BasicData) -> Self {
+    pub fn from(mut data: BasicData) -> Self {
+        data.set_authority_count(0);
+        data.set_answer_count(0);
         FailureAnswer {
             data
         }
